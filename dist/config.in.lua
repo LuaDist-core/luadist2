@@ -14,7 +14,7 @@ platform      = @PLATFORM@
 -- Directories (relative to root_dir) --------------------------------
 root_dir      = os.getenv("DIST_ROOT") or utils.get_luadist_location() or pl.path.sep
 temp_dir      = "tmp"
-share_dir     = pl.path.join("share", "LuaDist")
+share_dir     = pl.path.join("share", "luadist2")
 
 -- Manifest information ----------------------------------------------
 manifest_filename   = "manifest-file"

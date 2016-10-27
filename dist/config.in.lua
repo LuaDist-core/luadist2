@@ -24,8 +24,7 @@ local_manifest_file = pl.path.join(share_dir, manifest_filename)
 manifest_repos = {
     -- Manually updated core manifest, contains lua, lua-git, zlib packages and
     -- everything other that should not go through LuaRocks management
-    "git://github.com/marusinP/manifest.git",
-
+    "git://github.com/LuaDist-core/manifest.git",
     -- Generated manifest based on LuaRocks packages
     "git://github.com/LuaDist2/manifest.git",
 }

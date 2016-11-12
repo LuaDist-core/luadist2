@@ -14,7 +14,7 @@ dependencies = {
     "lualogging >= 1.3.0-1",
     "rocksolver >= 0.4-1",
     "rockspec2cmake >= 0.1-1",
-    "penlight == 1.3.3.luadist-1",
+    "penlight >= 1.4.1",
     "lua-git >= 0.5-1",
 }
 build = {

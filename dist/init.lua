@@ -135,6 +135,198 @@ function dist.install(package_names, deploy_dir, variables)
     return result, err, status
 end
 
+-- Makes 'package_names' using optional CMake 'variables',
+-- returns true on success and nil, error_message, error_code on error
+-- Error codes:
+-- 1 - creating local manifest failed
+-- 2 - dependency resolving failed
+-- 4 - installation of requested package failed
+-- 5 - installation of dependency failed
+local function _make(package_names, variables)
+    -- Get installed packages
+    local installed = mgr.get_installed()
+
+
+    -- Creates local manifest table, which has the same format as manifests from the remote repository.
+    -- Manifest contains all packages present in the 'cfg.root_dir'. Function is searching for .rockspec files in all
+    -- subdirectories of 'cfg.root_dir', but only 1 level deep.
+    -- Subdirectory with package must have name 'package_name verison', e.g. 'inilazy 1.05-1', 'yaml 1.1.2-1', 'bk-tree 1.0.0-1'.
+    -- returns manifest table
+
+    local function generate_local_manifest()
+
+        -- Get all subdirectories
+        local subdirectories = pl.dir.getdirectories(cfg.root_dir)
+
+        local local_manifest = ordered.Ordered()
+
+        local_manifest["packages"] = {}
+        local local_rockspec_files = {}
+
+        -- get all 'rockspec' files in 'cfg.root_dir' subdirectories,
+        -- searching only 1 level deep.
+        -- Subdirectory with package must have name 'package_name verison', e.g. 'inilazy 1.05-1', 'yaml 1.1.2-1', 'bk-tree 1.0.0-1'.
+        for _ ,subdir in pairs(subdirectories) do
+            local rockspec_files = pl.dir.getfiles(subdir, "*.rockspec")
+            for _ ,rockspec in pairs(rockspec_files) do
+                table.insert(local_rockspec_files, rockspec)
+            end
+        end
+
+        local packages_in_manifest = {}
+
+        -- Iterate through all found rockspecs
+        for _, local_rockspec_file in pairs(local_rockspec_files) do
+
+            local pkg = {}
+            local local_rockspec = mf.load_rockspec(local_rockspec_file)
+
+            if not local_rockspec then
+                log:error("Local rockspec "..local_rockspec_file.."could not be loaded")
+            else
+                -- Fetch info about the package from the rockspec
+                local pkg_name = local_rockspec["package"]
+                local pkg_version = local_rockspec["version"]
+                deps = {}
+                deps["dependencies"] = local_rockspec["dependencies"]
+
+                if local_rockspec["supported_platforms"] then
+                    deps["supported_platforms"] = local_rockspec["supported_platforms"]
+                end
+
+                local packages_from_rockspec = local_manifest["packages"]
+
+                -- if there already was other version of package 'pkg name'
+                if packages_from_rockspec[pkg_name] then
+                    pkg = packages_from_rockspec[pkg_name]
+                end
+
+                pkg[pkg_version] = deps
+                packages_in_manifest[pkg_name] = pkg
+            end
+            local_manifest["packages"] = packages_in_manifest
+
+        end
+        local_manifest["local_path"] = cfg.root_dir
+
+        return local_manifest
+    end
+
+    -- Generate local manifest
+    local manifest, err = generate_local_manifest(cfg.root_dir)
+    if not manifest then
+        return nil, err, 1
+    end
+
+    local solver = rocksolver.DependencySolver(manifest, cfg.platform)
+
+
+    local function resolve_dependencies(package_names, _installed, preinstall_lua)
+        local dependencies = ordered.Ordered()
+        local installed = rocksolver.utils.deepcopy(_installed)
+
+        if preinstall_lua then
+            table.insert(installed, preinstall_lua)
+        end
+
+        for _, package_name in pairs(package_names) do
+            -- Resolve dependencies
+            local new_dependencies, err = solver:resolve_dependencies(package_name, installed)
+
+            if err then
+                return nil, err
+            end
+
+            -- Update dependencies to install with currently found ones and update installed packages
+            -- for next dependency resolving as if previously found dependencies were already installed
+            for _, dependency in pairs(new_dependencies) do
+                dependencies[dependency] = dependency
+                installed[dependency] = dependency
+            end
+        end
+
+        return dependencies
+    end
+
+    -- Try to resolve dependencies as is
+    local dependencies, err = resolve_dependencies(package_names, installed)
+
+    -- If we failed, it is most likely because wrong version of lua package was selected,
+    -- try to cycle through all of them, we may eventually succeed
+    if not dependencies then
+        -- If lua is already installed, we can do nothing about it, user will have to upgrade / downgrade it manually
+        if installed.lua then
+            return nil, err, 2
+        end
+
+        -- Try all versions of lua, newer first
+        for version, info in rocksolver.utils.sort(manifest.packages.lua or {}, rocksolver.const.compareVersions) do
+            log:info("Trying to force usage of 'lua %s' to solve dependency resolving issues", version)
+
+            -- Here we do not care about returned error message, we will use the original one if all fails
+            local new_dependencies = resolve_dependencies(package_names, installed, rocksolver.Package("lua", version, info, true))
+
+            if new_dependencies then
+                dependencies = ordered.Ordered()
+                dependencies[rocksolver.Package("lua", version, info, false)] = rocksolver.Package("lua", version, info, false)
+                for _, dep in pairs(new_dependencies) do
+                    dependencies[dep] = dep
+                end
+                break
+            end
+        end
+
+        if not dependencies then
+            return nil, err, 2
+        end
+    end
+
+    -- Table contains pairs <package, package directory>
+    local package_directories = ordered.Ordered()
+
+    for _, pkg in pairs(dependencies) do
+        local pkg_dir = pl.path.join(cfg.root_dir, tostring(pkg))
+        package_directories[pkg] = pkg_dir
+    end
+
+
+
+    -- Install packages. Installs every package 'pkg' from its package directory 'dir'
+    for pkg, dir in pairs(package_directories) do
+        -- prevent cleaning up (deleting the package subfolder)
+        cfg.debug = true
+        ok, err = mgr.install_pkg(pkg, dir, variables)
+        cfg.debug = false
+
+        if not ok then
+            return nil, "Error installing: " ..err, (utils.name_matches(tostring(pkg), package_names, true) and 4) or 5
+        end
+
+        -- If installation was successful, update local manifest
+        table.insert(installed, pkg)
+        mgr.save_installed(installed)
+    end
+
+    return true
+end
+
+-- Public wrapper for 'make' functionality, ensures correct setting of 'deploy_dir'
+-- and performs argument checks.
+-- Maked package including missing dependencies must be present in 'deploy_dir'.
+function dist.make(package_names, deploy_dir, variables)
+    if not package_names then return true end
+    if type(package_names) == "string" then package_names = {package_names} end
+
+    assert(type(package_names) == "table", "dist.make: Argument 'package_names' is not a table or string.")
+    assert(deploy_dir and type(deploy_dir) == "string", "dist.make: Argument 'deploy_dir' is not a string.")
+
+    if deploy_dir then cfg.update_root_dir(deploy_dir) end
+    local result, err, status = _make(package_names, variables)
+    if deploy_dir then cfg.revert_root_dir() end
+
+    return result, err, status
+end
+
 -- Removes 'package_names' and returns amount of removed modules
 --
 -- In constrast to cli remove command, this one doesn't remove all packages

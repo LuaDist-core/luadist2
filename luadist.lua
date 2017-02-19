@@ -100,11 +100,12 @@ Usage: luadist [DEPLOYMENT_DIRECTORY] install MODULES... [-VARIABLES...]
         help = [[
 Usage: luadist [DEPLOYMENT_DIRECTORY] make MODULES... [-VARIABLES...]
 
-    The 'make' command will install specified MODULES to
-    DEPLOYMENT_DIRECTORY.
-    MODULES with all dependencies that are not installed have to be present in the DEPLOYMENT_DIRECTORY saved in
-    subdirectories named 'module version'.
-    LuaDist will also automatically resolve and install all dependencies, if they are available. 
+    The 'make' command will install specified MODULES to DEPLOYMENT_DIRECTORY.
+
+    MODULES with all dependencies that are not installed have to be present in the DEPLOYMENT_DIRECTORY
+    saved in subdirectories named 'module version'. 
+
+    LuaDist will also automatically resolve and install all dependencies, if they are available.
 
     If DEPLOYMENT_DIRECTORY is not specified, the deployment directory
     of LuaDist is used.

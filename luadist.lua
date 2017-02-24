@@ -98,13 +98,15 @@ Usage: luadist [DEPLOYMENT_DIRECTORY] install MODULES... [-VARIABLES...]
     -- Make modules.
     ["make"] = {
         help = [[
-Usage: luadist [DEPLOYMENT_DIRECTORY] make MODULES... [-VARIABLES...]
+Usage: luadist [DEPLOYMENT_DIRECTORY] make [-VARIABLES...]
 
-    The 'make' command will install specified MODULES to
-    DEPLOYMENT_DIRECTORY.
-    MODULES with all dependencies that are not installed have to be present in the DEPLOYMENT_DIRECTORY saved in
-    subdirectories named 'module version'.
-    LuaDist will also automatically resolve and install all dependencies, if they are available. 
+    The 'make' command will install module from DEPLOYMENT_DIRECTORY.
+
+    All Module files should be present in the DEPLOYMENT_DIRECTORY. LuaDist will scan DEPLOYMENT_DIRECTORY and
+    search for the .rockspec files. If there are multiple .rockspec files in DEPLOYMENT_DIRECTORY, LuaDist will
+    only install module described in the first found rockspec.
+
+    LuaDist will also automatically resolve and install all dependencies, if they are available.
 
     If DEPLOYMENT_DIRECTORY is not specified, the deployment directory
     of LuaDist is used.
@@ -113,22 +115,16 @@ Usage: luadist [DEPLOYMENT_DIRECTORY] make MODULES... [-VARIABLES...]
     configuration VARIABLES (e.g. -variable=value) can be specified.
         ]],
 
-        run = function (deploy_dir, modules, cmake_variables)
-            deploy_dir = deploy_dir or cfg.root_dir
-            if type(modules) == "string" then modules = {modules} end
+        run = function (deploy_dir, cmake_variables)
+            deploy_dir = deploy_dir or pl.path.currentdir()
             cmake_variables = cmake_variables or {}
 
             assert(type(deploy_dir) == "string", "luadist.make: Argument 'deploy_dir' is not a string.")
-            assert(type(modules) == "table", "luadist.make: Argument 'modules' is not a string or table.")
             assert(type(cmake_variables) == "table", "luadist.make: Argument 'cmake_variables' is not a table.")
             deploy_dir = pl.path.abspath(deploy_dir)
 
-            if #modules == 0 then
-                print("No modules to make specified.")
-                return 0
-            end
-
-            local ok, err, status = dist.make(modules, deploy_dir, cmake_variables)
+            local ok, err, status = dist.make(deploy_dir, cmake_variables)
+            deploy_dir = cfg.root_dir
             if not ok then
                 print(err)
                 os.exit(status)

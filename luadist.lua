@@ -106,7 +106,7 @@ Usage: luadist [DEPLOYMENT_DIRECTORY] make [-VARIABLES...]
     search for the .rockspec files. If there are multiple .rockspec files in DEPLOYMENT_DIRECTORY, LuaDist will
     only install module described in the first found rockspec.
 
-    LuaDist will also automatically resolve and install all dependencies, if they are available.
+    LuaDist will also automatically resolve, download (if necessary) and install all dependencies. 
 
     If DEPLOYMENT_DIRECTORY is not specified, the deployment directory
     of LuaDist is used.

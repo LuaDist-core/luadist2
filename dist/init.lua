@@ -98,6 +98,7 @@ local function _install(package_names, variables)
         end
     end
 
+
     -- Fetch the packages from repository
     local dirs, err = downloader.fetch_pkgs(dependencies, cfg.temp_dir_abs, manifest.repo_path)
     if not dirs then
@@ -138,87 +139,38 @@ end
 -- Makes 'package_names' using optional CMake 'variables',
 -- returns true on success and nil, error_message, error_code on error
 -- Error codes:
--- 1 - creating local manifest failed
+-- 1 - manifest retrieval failed
 -- 2 - dependency resolving failed
+-- 3 - package download failed
 -- 4 - installation of requested package failed
 -- 5 - installation of dependency failed
-local function _make(package_names, variables)
+-- 6 - no package to make found
+local function _make(deploy_dir,variables)
     -- Get installed packages
     local installed = mgr.get_installed()
 
-
-    -- Creates local manifest table, which has the same format as manifests from the remote repository.
-    -- Manifest contains all packages present in the 'cfg.root_dir'. Function is searching for .rockspec files in all
-    -- subdirectories of 'cfg.root_dir', but only 1 level deep.
-    -- Subdirectory with package must have name 'package_name verison', e.g. 'inilazy 1.05-1', 'yaml 1.1.2-1', 'bk-tree 1.0.0-1'.
-    -- returns manifest table
-
-    local function generate_local_manifest()
-
-        -- Get all subdirectories
-        local subdirectories = pl.dir.getdirectories(cfg.root_dir)
-
-        local local_manifest = ordered.Ordered()
-
-        local_manifest["packages"] = {}
-        local local_rockspec_files = {}
-
-        -- get all 'rockspec' files in 'cfg.root_dir' subdirectories,
-        -- searching only 1 level deep.
-        -- Subdirectory with package must have name 'package_name verison', e.g. 'inilazy 1.05-1', 'yaml 1.1.2-1', 'bk-tree 1.0.0-1'.
-        for _ ,subdir in pairs(subdirectories) do
-            local rockspec_files = pl.dir.getfiles(subdir, "*.rockspec")
-            for _ ,rockspec in pairs(rockspec_files) do
-                table.insert(local_rockspec_files, rockspec)
-            end
-        end
-
-        local packages_in_manifest = {}
-
-        -- Iterate through all found rockspecs
-        for _, local_rockspec_file in pairs(local_rockspec_files) do
-
-            local pkg = {}
-            local local_rockspec = mf.load_rockspec(local_rockspec_file)
-
-            if not local_rockspec then
-                log:error("Local rockspec "..local_rockspec_file.."could not be loaded")
-            else
-                -- Fetch info about the package from the rockspec
-                local pkg_name = local_rockspec["package"]
-                local pkg_version = local_rockspec["version"]
-                deps = {}
-                deps["dependencies"] = local_rockspec["dependencies"]
-
-                if local_rockspec["supported_platforms"] then
-                    deps["supported_platforms"] = local_rockspec["supported_platforms"]
-                end
-
-                local packages_from_rockspec = local_manifest["packages"]
-
-                -- if there already was other version of package 'pkg name'
-                if packages_from_rockspec[pkg_name] then
-                    pkg = packages_from_rockspec[pkg_name]
-                end
-
-                pkg[pkg_version] = deps
-                packages_in_manifest[pkg_name] = pkg
-            end
-            local_manifest["packages"] = packages_in_manifest
-
-        end
-        local_manifest["local_path"] = cfg.root_dir
-
-        return local_manifest
-    end
-
-    -- Generate local manifest
-    local manifest, err = generate_local_manifest(cfg.root_dir)
+    -- Get manifest
+    local manifest, err = mf.get_manifest(true)
     if not manifest then
         return nil, err, 1
     end
 
     local solver = rocksolver.DependencySolver(manifest, cfg.platform)
+    local rockspec_files =  pl.dir.getfiles(deploy_dir, "*.rockspec")
+
+    if #rockspec_files == 0 then
+        return nil, "Directory " .. deploy_dir .. " doesn't contain any .rockspec files." and 6
+    elseif #rockspec_files > 1 then
+        log:info("Multiple rockspec files found, file ".. rockspec_files[1] .. "will be used.")
+    else
+        log:info("File ".. rockspec_files[1] .. " will be used.")
+    end
+    local maked_pkg_manifest =mf.load_rockspec(rockspec_files[1])
+    local maked_pkg = maked_pkg_manifest["package"] .. " " .. maked_pkg_manifest["version"]
+    log:info("Making package ".. maked_pkg)
+    package_names = {maked_pkg}
+
+
 
 
     local function resolve_dependencies(package_names, _installed, preinstall_lua)
@@ -281,22 +233,31 @@ local function _make(package_names, variables)
         end
     end
 
+
     -- Table contains pairs <package, package directory>
     local package_directories = ordered.Ordered()
 
     for _, pkg in pairs(dependencies) do
-        local pkg_dir = pl.path.join(cfg.root_dir, tostring(pkg))
-        package_directories[pkg] = pkg_dir
+        local split_package = pl.stringx.split(tostring(pkg),' ')
+        local pkg_name = split_package[1]
+        local pkg_version = split_package[2]
+        local local_url = manifest["packages"]
+         local_url =local_url[pkg_name][pkg_version]
+        local_url = local_url["local_url"]
+
+        if local_url then
+            log:info("Package ".. pkg .. " will be installed from local url " .. local_url)
+            package_directories[pkg] = local_url
+        else
+            local dirs, err = downloader.fetch_pkgs({pkg}, cfg.temp_dir_abs, manifest.repo_path)
+            package_directories[pkg] = dirs[pkg]
+        end
     end
-
-
 
     -- Install packages. Installs every package 'pkg' from its package directory 'dir'
     for pkg, dir in pairs(package_directories) do
         -- prevent cleaning up (deleting the package subfolder)
-        cfg.debug = true
         ok, err = mgr.install_pkg(pkg, dir, variables)
-        cfg.debug = false
 
         if not ok then
             return nil, "Error installing: " ..err, (utils.name_matches(tostring(pkg), package_names, true) and 4) or 5
@@ -313,17 +274,9 @@ end
 -- Public wrapper for 'make' functionality, ensures correct setting of 'deploy_dir'
 -- and performs argument checks.
 -- Maked package including missing dependencies must be present in 'deploy_dir'.
-function dist.make(package_names, deploy_dir, variables)
-    if not package_names then return true end
-    if type(package_names) == "string" then package_names = {package_names} end
-
-    assert(type(package_names) == "table", "dist.make: Argument 'package_names' is not a table or string.")
+function dist.make(deploy_dir, variables)
     assert(deploy_dir and type(deploy_dir) == "string", "dist.make: Argument 'deploy_dir' is not a string.")
-
-    if deploy_dir then cfg.update_root_dir(deploy_dir) end
-    local result, err, status = _make(package_names, variables)
-    if deploy_dir then cfg.revert_root_dir() end
-
+    local result, err, status = _make(deploy_dir, variables)
     return result, err, status
 end
 

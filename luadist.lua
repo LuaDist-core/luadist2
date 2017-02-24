@@ -25,7 +25,7 @@ Usage: luadist [DEPLOYMENT_DIRECTORY] <COMMAND> [ARGUMENTS...] [-VARIABLES...]
 
         help      - print this help
         install   - install modules
-        make      - make local modules
+        make      - make local module
         remove    - remove modules
         list      - list installed modules
         info      - show information about modules

@@ -159,7 +159,7 @@ local function _make(deploy_dir,variables)
     local rockspec_files =  pl.dir.getfiles(deploy_dir, "*.rockspec")
 
     if #rockspec_files == 0 then
-        return nil, "Directory " .. deploy_dir .. " doesn't contain any .rockspec files." and 6
+        return nil, "Directory " .. deploy_dir .. " doesn't contain any .rockspec files.", 6
     elseif #rockspec_files > 1 then
         log:info("Multiple rockspec files found, file ".. rockspec_files[1] .. "will be used.")
     else

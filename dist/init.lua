@@ -145,7 +145,7 @@ end
 -- 4 - installation of requested package failed
 -- 5 - installation of dependency failed
 -- 6 - no package to make found
-local function _make(deploy_dir,variables)
+local function _make (deploy_dir,variables, source_dir)
     -- Get installed packages
     local installed = mgr.get_installed()
 
@@ -156,12 +156,12 @@ local function _make(deploy_dir,variables)
     end
 
     local solver = rocksolver.DependencySolver(manifest, cfg.platform)
-    local rockspec_files =  pl.dir.getfiles(deploy_dir, "*.rockspec")
+    local rockspec_files =  pl.dir.getfiles(source_dir, "*.rockspec")
 
     if #rockspec_files == 0 then
-        return nil, "Directory " .. deploy_dir .. " doesn't contain any .rockspec files.", 6
+        return nil, "Directory " .. source_dir .. " doesn't contain any .rockspec files.", 6
     elseif #rockspec_files > 1 then
-        log:info("Multiple rockspec files found, file ".. rockspec_files[1] .. "will be used.")
+        log:info("Multiple rockspec files found, file ".. pl.path.basename(rockspec_files[1]) .. "will be used.")
     else
         log:info("File ".. rockspec_files[1] .. " will be used.")
     end
@@ -274,9 +274,14 @@ end
 -- Public wrapper for 'make' functionality, ensures correct setting of 'deploy_dir'
 -- and performs argument checks.
 -- Maked package including missing dependencies must be present in 'deploy_dir'.
-function dist.make(deploy_dir, variables)
+function dist.make(deploy_dir, variables, source_dir)
     assert(deploy_dir and type(deploy_dir) == "string", "dist.make: Argument 'deploy_dir' is not a string.")
-    local result, err, status = _make(deploy_dir, variables)
+    assert(source_dir and type(source_dir) == "string", "dist.make: Argument 'destination_dir' is not a string.")
+
+    if deploy_dir then cfg.update_root_dir(deploy_dir) end
+    local result, err, status = _make(deploy_dir, variables, source_dir)
+    if deploy_dir then cfg.revert_root_dir() end
+
     return result, err, status
 end
 

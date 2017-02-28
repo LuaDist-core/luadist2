@@ -106,7 +106,7 @@ Usage: luadist [DEPLOYMENT_DIRECTORY] make [-VARIABLES...]
     search for the .rockspec files. If there are multiple .rockspec files in DEPLOYMENT_DIRECTORY, LuaDist will
     only install module described in the first found rockspec.
 
-    LuaDist will also automatically resolve, download (if necessary) and install all dependencies. 
+    LuaDist will also automatically resolve, download (if necessary) and install all dependencies.
 
     If DEPLOYMENT_DIRECTORY is not specified, the deployment directory
     of LuaDist is used.
@@ -116,15 +116,14 @@ Usage: luadist [DEPLOYMENT_DIRECTORY] make [-VARIABLES...]
         ]],
 
         run = function (deploy_dir, cmake_variables)
-            deploy_dir = deploy_dir or pl.path.currentdir()
+            deploy_dir = deploy_dir or cfg.root_dir
+            local source_dir = pl.path.currentdir()
             cmake_variables = cmake_variables or {}
 
             assert(type(deploy_dir) == "string", "luadist.make: Argument 'deploy_dir' is not a string.")
             assert(type(cmake_variables) == "table", "luadist.make: Argument 'cmake_variables' is not a table.")
-            deploy_dir = pl.path.abspath(deploy_dir)
 
-            local ok, err, status = dist.make(deploy_dir, cmake_variables)
-            deploy_dir = cfg.root_dir
+            local ok, err, status = dist.make(deploy_dir, cmake_variables,source_dir)
             if not ok then
                 print(err)
                 os.exit(status)
@@ -541,3 +540,4 @@ else
     end
     return print_help()
 end
+

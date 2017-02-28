@@ -34,6 +34,8 @@ manifest_repos = {
     "git://github.com/LuaDist2/manifest.git",
 }
 
+include_local_repos     = false         -- include local repositories.
+
 -- Settings ----------------------------------------------------------
 debug         = false         -- Use debug mode (mainly does not clean temp).
 

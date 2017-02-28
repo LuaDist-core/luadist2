@@ -145,33 +145,36 @@ end
 -- 4 - installation of requested package failed
 -- 5 - installation of dependency failed
 -- 6 - no package to make found
-local function _make (deploy_dir,variables, source_dir)
+local function _make (deploy_dir,variables, current_dir)
+
     -- Get installed packages
     local installed = mgr.get_installed()
 
-    -- Get manifest
-    local manifest, err = mf.get_manifest(true)
+    -- Get manifest including the local repos
+    local manifest, err = mf.get_manifest(cfg.include_local_repos)
     if not manifest then
         return nil, err, 1
     end
 
     local solver = rocksolver.DependencySolver(manifest, cfg.platform)
-    local rockspec_files =  pl.dir.getfiles(source_dir, "*.rockspec")
+
+    -- Collect all rockspec files in the current_directory
+    local rockspec_files =  pl.dir.getfiles(current_dir, "*.rockspec")
+    table.sort(rockspec_files)
 
     if #rockspec_files == 0 then
-        return nil, "Directory " .. source_dir .. " doesn't contain any .rockspec files.", 6
+        return nil, "Directory " .. current_dir .. " doesn't contain any .rockspec files.", 6
     elseif #rockspec_files > 1 then
         log:info("Multiple rockspec files found, file ".. pl.path.basename(rockspec_files[1]) .. "will be used.")
     else
-        log:info("File ".. rockspec_files[1] .. " will be used.")
+        log:info("File ".. pl.path.basename(rockspec_files[1]) .. " will be used.")
     end
+
     local maked_pkg_manifest =mf.load_rockspec(rockspec_files[1])
     local maked_pkg = maked_pkg_manifest["package"] .. " " .. maked_pkg_manifest["version"]
+
     log:info("Making package ".. maked_pkg)
     package_names = {maked_pkg}
-
-
-
 
     local function resolve_dependencies(package_names, _installed, preinstall_lua)
         local dependencies = ordered.Ordered()
@@ -273,13 +276,15 @@ end
 
 -- Public wrapper for 'make' functionality, ensures correct setting of 'deploy_dir'
 -- and performs argument checks.
--- Maked package including missing dependencies must be present in 'deploy_dir'.
-function dist.make(deploy_dir, variables, source_dir)
+-- Local repositories are also searched when LuaDist searches for the missing dependencies
+function dist.make(deploy_dir, variables, current_dir)
     assert(deploy_dir and type(deploy_dir) == "string", "dist.make: Argument 'deploy_dir' is not a string.")
-    assert(source_dir and type(source_dir) == "string", "dist.make: Argument 'destination_dir' is not a string.")
+    assert(current_dir and type(current_dir) == "string", "dist.make: Argument 'destination_dir' is not a string.")
 
     if deploy_dir then cfg.update_root_dir(deploy_dir) end
-    local result, err, status = _make(deploy_dir, variables, source_dir)
+    cfg.include_local_repos = true
+    local result, err, status = _make(deploy_dir, variables, current_dir)
+    cfg.include_local_repos = false
     if deploy_dir then cfg.revert_root_dir() end
 
     return result, err, status

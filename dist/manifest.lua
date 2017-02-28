@@ -9,11 +9,11 @@ local manifest_module = {}
 
 -- Return the joined manifest table from 'cfg.manifest_repos' locations
 local manifest = nil
-function manifest_module.get_manifest(include_local_repos)
+function manifest_module.get_manifest()
     -- Download manifest if this is first time we are requesting it in this run,
     -- otherwise it is cached in memory until luadist is terminated
     if manifest == nil then
-        manifest, err = manifest_module.download_manifest(cfg.manifest_repos,include_local_repos)
+        manifest, err = manifest_module.download_manifest(cfg.manifest_repos)
         if not manifest then
             return nil, "Error downloading manifest: " .. err
         end
@@ -24,7 +24,7 @@ end
 
 -- Download manifest from the table of git 'manifest_urls' and return manifest
 -- table on success and nil and error message on error.
-function manifest_module.download_manifest(manifest_urls,include_local_repos)
+function manifest_module.download_manifest(manifest_urls)
     manifest_urls = manifest_urls or cfg.manifest_repos
     if type(manifest_urls) == "string" then manifest_urls = {manifest_urls} end
 
@@ -60,7 +60,7 @@ function manifest_module.download_manifest(manifest_urls,include_local_repos)
 
             local manifest_file = pl.path.join(clone_dir, cfg.manifest_filename)
             current_manifest, err = manifest_module.load_manifest(manifest_file)
-        elseif include_local_repos then
+        elseif cfg.include_local_repos then
             current_manifest,err=manifest_module.generate_local_manifest(repo)
         else
             err = "Local repo found. To install from local repos use 'make' command."

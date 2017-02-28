@@ -100,13 +100,22 @@ Usage: luadist [DEPLOYMENT_DIRECTORY] install MODULES... [-VARIABLES...]
         help = [[
 Usage: luadist [DEPLOYMENT_DIRECTORY] make [-VARIABLES...]
 
-    The 'make' command will install module from DEPLOYMENT_DIRECTORY.
+    The 'make' command will install module stored the current working
+    directory to the DEPLOYMENT_DIRECTORY.
 
-    All Module files should be present in the DEPLOYMENT_DIRECTORY. LuaDist will scan DEPLOYMENT_DIRECTORY and
-    search for the .rockspec files. If there are multiple .rockspec files in DEPLOYMENT_DIRECTORY, LuaDist will
-    only install module described in the first found rockspec.
+    LuaDist will search for the rockspec file in the current working directory
+    and install a module specified in the rockspec.
+
+    If there are multiple .rockspec files in current working
+    directory, LuaDist will sort them alphabetically and use only the first one.
 
     LuaDist will also automatically resolve, download (if necessary) and install all dependencies.
+
+    Luadist also searches in local repositories (local filesystem folders)
+    when searching for missing dependencies of installed module.
+
+    WARNING: When searching for modules in local repository the subdirectories
+    are traversed only 1 level deep.
 
     If DEPLOYMENT_DIRECTORY is not specified, the deployment directory
     of LuaDist is used.
@@ -117,13 +126,13 @@ Usage: luadist [DEPLOYMENT_DIRECTORY] make [-VARIABLES...]
 
         run = function (deploy_dir, cmake_variables)
             deploy_dir = deploy_dir or cfg.root_dir
-            local source_dir = pl.path.currentdir()
+            local current_dir = pl.path.currentdir()
             cmake_variables = cmake_variables or {}
 
             assert(type(deploy_dir) == "string", "luadist.make: Argument 'deploy_dir' is not a string.")
             assert(type(cmake_variables) == "table", "luadist.make: Argument 'cmake_variables' is not a table.")
 
-            local ok, err, status = dist.make(deploy_dir, cmake_variables,source_dir)
+            local ok, err, status = dist.make(deploy_dir, cmake_variables,current_dir)
             if not ok then
                 print(err)
                 os.exit(status)
@@ -540,4 +549,3 @@ else
     end
     return print_help()
 end
-

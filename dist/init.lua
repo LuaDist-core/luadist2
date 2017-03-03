@@ -162,7 +162,7 @@ local function _make (deploy_dir,variables, current_dir)
     local rockspec_files =  pl.dir.getfiles(current_dir, "*.rockspec")
     table.sort(rockspec_files)
 
-    -- Package from first rockspec will be installed, others will be ignored.
+    -- Package specified in first rockspec will be installed, others will be ignored.
     if #rockspec_files == 0 then
         return nil, "Directory " .. current_dir .. " doesn't contain any .rockspec files.", 6
     elseif #rockspec_files > 1 then
@@ -250,10 +250,12 @@ local function _make (deploy_dir,variables, current_dir)
         -- Maked package
         if tostring(pkg) == maked_pkg then
             package_directories[pkg] = current_dir
+
         -- Package with local url
         elseif local_url then
             log:info("Package ".. pkg .. " will be installed from local url " .. local_url)
             package_directories[pkg] = local_url
+
         --  Package fetched from remote repo
         else
             local dirs, err = downloader.fetch_pkgs({pkg}, cfg.temp_dir_abs, manifest.repo_path)
@@ -271,6 +273,7 @@ local function _make (deploy_dir,variables, current_dir)
             ok, err = mgr.install_pkg(pkg, dir, variables)
             if ok and store_debug == false then
                 pl.dir.rmtree(current_dir)
+                pl.dir.rmtree(pl.path.join(deploy_dir,"tmp",pkg.."-build"))
             end
             cfg.debug = store_debug
         else

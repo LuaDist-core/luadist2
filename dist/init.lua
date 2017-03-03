@@ -158,10 +158,11 @@ local function _make (deploy_dir,variables, current_dir)
 
     local solver = rocksolver.DependencySolver(manifest, cfg.platform)
 
-    -- Collect all rockspec files in the current_directory
+    -- Collect all rockspec files in the current_directory and sort them alphabetically.
     local rockspec_files =  pl.dir.getfiles(current_dir, "*.rockspec")
     table.sort(rockspec_files)
 
+    -- Package from first rockspec will be installed, others will be ignored.
     if #rockspec_files == 0 then
         return nil, "Directory " .. current_dir .. " doesn't contain any .rockspec files.", 6
     elseif #rockspec_files > 1 then
@@ -170,10 +171,8 @@ local function _make (deploy_dir,variables, current_dir)
         log:info("File ".. pl.path.basename(rockspec_files[1]) .. " will be used.")
     end
 
-    local maked_pkg_manifest =mf.load_rockspec(rockspec_files[1])
-    local maked_pkg = maked_pkg_manifest["package"] .. " " .. maked_pkg_manifest["version"]
-
-    log:info("Making package ".. maked_pkg)
+    local maked_pkg_rockspec =mf.load_rockspec(rockspec_files[1])
+    local maked_pkg = maked_pkg_rockspec["package"] .. " " .. maked_pkg_rockspec["version"]
     package_names = {maked_pkg}
 
     local function resolve_dependencies(package_names, _installed, preinstall_lua)
@@ -241,27 +240,42 @@ local function _make (deploy_dir,variables, current_dir)
     local package_directories = ordered.Ordered()
 
     for _, pkg in pairs(dependencies) do
-        local split_package = pl.stringx.split(tostring(pkg),' ')
-        local pkg_name = split_package[1]
-        local pkg_version = split_package[2]
+        local pkg_name, pkg_version = rocksolver.const.split(tostring(pkg))
+
+        -- Extract local url from package, if any
         local local_url = manifest["packages"]
-         local_url =local_url[pkg_name][pkg_version]
+        local_url = local_url[pkg_name][pkg_version]
         local_url = local_url["local_url"]
 
-        if local_url then
+        -- Maked package
+        if tostring(pkg) == maked_pkg then
+            package_directories[pkg] = current_dir
+        -- Package with local url
+        elseif local_url then
             log:info("Package ".. pkg .. " will be installed from local url " .. local_url)
             package_directories[pkg] = local_url
+        --  Package fetched from remote repo
         else
             local dirs, err = downloader.fetch_pkgs({pkg}, cfg.temp_dir_abs, manifest.repo_path)
             package_directories[pkg] = dirs[pkg]
         end
     end
 
+
     -- Install packages. Installs every package 'pkg' from its package directory 'dir'
     for pkg, dir in pairs(package_directories) do
-        -- prevent cleaning up (deleting the package subfolder)
-        ok, err = mgr.install_pkg(pkg, dir, variables)
-
+        -- Prevent cleaning our current direcory when making of package was not successful
+        if dir == current_dir then
+            store_debug = cfg.debug
+            cfg.debug = true
+            ok, err = mgr.install_pkg(pkg, dir, variables)
+            if ok and store_debug == false then
+                pl.dir.rmtree(current_dir)
+            end
+            cfg.debug = store_debug
+        else
+            ok, err = mgr.install_pkg(pkg, dir, variables)
+        end
         if not ok then
             return nil, "Error installing: " ..err, (utils.name_matches(tostring(pkg), package_names, true) and 4) or 5
         end

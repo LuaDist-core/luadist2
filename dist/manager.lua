@@ -241,31 +241,40 @@ function manager.get_installed()
     return manifest
 end
 
-function manager.get_files_of_pkg(pkg_name, pkg_version)
-    assert(type(pkg_name) == "string", "manager.copy_pkg: Argument 'pkg_name' is not a string.")
-    assert(not pkg_version or type(pkg_version) == "string", "manager.copy_pkg: Argument 'pkg_version' is not a string.")
+function manager.get_matching_packages(pkg_constraint,installed)
+-- TODO asserts
 
+    local found = {}
+    for _, installed_pkg in pairs(installed) do
+    assert(getmetatable(installed_pkg) == rocksolver.Package, "manager.copy_installed_pkg: Argument 'installed' does not contain Package instances.")
+        if installed_pkg:matches(pkg_constraint) then
+                table.insert(found,installed_pkg)
+        end
+    end
+    return found
+end
+
+function manager.copy_installed_pkg(pkg_constraints, source_dir, destination_dir)
+    assert(type(pkg_constraints) == "string" or type(pkg_constraints) == "table", "manager.copy_installed_pkg: Argument 'pkg_constraints' is not a string.")
+    if type(pkg_constraints) == "string" then pkg_constraints = {pkg_constraints} end
     local installed = manager.get_installed()
 
-
-    local new_files = {}
-
-    for _, installed_pkg in pairs(installed) do
-        assert(getmetatable(installed_pkg) == rocksolver.Package, "manager.copy_pkg: Argument 'installed' does not contain Package instances.")
-        if pkg_name == installed_pkg.name then
-            local ver = installed_pkg.version
-            ver = ver["string"]
-            if not pkg_version or pkg_version == ver then
+    for _, pkg_constraint in pairs(pkg_constraints) do
+        for _, installed_pkg in pairs(installed) do
+        assert(getmetatable(installed_pkg) == rocksolver.Package, "manager.copy_installed_pkg: Argument 'installed' does not contain Package instances.")
+            if installed_pkg:matches(pkg_constraint) then
                 pkg_files = installed_pkg["files"]
-
                 for _, old_file in pairs(pkg_files) do
-                    table.insert(new_files,old_file)
+                    local file_rel_path = pl.path.relpath(old_file,source_dir)
+                    local dest_path = pl.path.join(destination_dir,pl.path.dirname(file_rel_path))
+                    pl.dir.makepath(dest_path)
+                    pl.dir.copyfile(old_file,dest_path)
                 end
             end
         end
     end
 
-    return new_files
 end
+
 
 return manager

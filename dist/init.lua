@@ -440,6 +440,7 @@ local function _pack(package_names, deploy_dir, destination_dir)
             else
                 if installed_pkg:matches(pkg_name) and not found then
                     found = mgr.export_installed_pkg(installed_pkg, deploy_dir, destination_dir)
+                    local exported_pkg_rockspec = mgr.export_installed_rockspec(pkg, installed)
                 end
             end
         end

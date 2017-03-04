@@ -153,7 +153,7 @@ function manager.install_pkg(pkg, pkg_dir, variables)
     end
 
     for line in mf:lines() do
-        table.insert(pkg.files, line)
+        table.insert(pkg.files, pl.path.relpath(line, cfg.root_dir))
     end
     -- FIXME is deploy_dir necessary in local maifest?
     pkg["deploy_dir"] = cfg.root_dir
@@ -182,6 +182,7 @@ function manager.remove_pkg(pkg)
 
     -- Remove installed files
     for _, file in pairs(pkg.files) do
+        file = pl.path.join(cfg.root_dir, file)
         if pl.path.exists(file) then
             pl.file.delete(file)
 
@@ -242,17 +243,8 @@ function manager.get_installed()
     return manifest
 end
 
-function manager.get_matching_packages(pkg_constraint,installed)
--- TODO asserts
+function manager.export_installed_rockspec(pkg, installed)
 
-    local found = {}
-    for _, installed_pkg in pairs(installed) do
-    assert(getmetatable(installed_pkg) == rocksolver.Package, "manager.copy_installed_pkg: Argument 'installed' does not contain Package instances.")
-        if installed_pkg:matches(pkg_constraint) then
-                table.insert(found,installed_pkg)
-        end
-    end
-    return found
 end
 
 -- Export all files of package installed in the source_dir to destination_dir
@@ -262,15 +254,14 @@ function manager.export_installed_pkg(pkg, source_dir, destination_dir)
     local pkg_files = pkg.files
 
     -- Copy all files of package to specified directory
-    for _, old_file in pairs(pkg_files) do
-        local file_rel_path = pl.path.relpath(old_file,source_dir)
-        local dest_path = pl.path.join(destination_dir, pl.path.dirname(file_rel_path))
-        pl.dir.copyfile(old_file, dest_path)
-        pl.dir.makepath(dest_path)
+    for _, src_rel in pairs(pkg_files) do
+        local src_abs = pl.path.join(source_dir, src_rel)
+        local dest_dir = pl.path.join(destination_dir, pl.path.dirname(src_rel))
+        pl.dir.makepath(dest_dir)
+        pl.dir.copyfile(src_abs, dest_dir)
     end
 
     return true
 end
-
 
 return manager

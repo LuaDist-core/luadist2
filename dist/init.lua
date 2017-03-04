@@ -421,6 +421,38 @@ function dist.fetch(download_dir, package_names)
     return downloader.fetch_pkgs(packages, download_dir, manifest.repo_path)
 end
 
+local function _pack(package_names,deploy_dir, destination_dir)
+
+    local installed, err = dist.get_installed(deploy_dir)
+
+    if not installed then
+        return nil, err, 1
+    end
+
+    -- TODO export all modules to destination_dir
+
+
+    return true
+
+end
+
+-- Public wrapper for 'pack' functionality, ensures correct setting of 'deploy_dir'
+-- and performs argument checks
+function dist.pack(package_names, deploy_dir, destination_dir)
+    if not package_names or not destination_dir then return true end
+    if type(package_names) == "string" then package_names = {package_names} end
+
+    assert(type(package_names) == "table", "dist.pack: Argument 'package_names' is not a table or string.")
+    assert(deploy_dir and type(deploy_dir) == "string", "dist.pack: Argument 'deploy_dir' is not a string.")
+    assert(destination_dir and type(destination_dir) == "string", "dist.pack: Argument 'destination_dir' is not a string.")
+
+    if deploy_dir then cfg.update_root_dir(deploy_dir) end
+    local result, err, status = _pack(package_names,deploy_dir, destination_dir)
+    if deploy_dir then cfg.revert_root_dir() end
+
+    return result, err, status
+end
+
 -- Downloads packages specified in 'package_names' into 'download_dir',
 -- loads their rockspec files and returns table <package, rockspec>
 function dist.get_rockspec(download_dir, package_names)

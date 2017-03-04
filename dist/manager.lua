@@ -155,6 +155,7 @@ function manager.install_pkg(pkg, pkg_dir, variables)
     for line in mf:lines() do
         table.insert(pkg.files, line)
     end
+    -- FIXME is deploy_dir necessary in local maifest?
     pkg["deploy_dir"] = cfg.root_dir
     mf:close()
 

@@ -255,26 +255,21 @@ function manager.get_matching_packages(pkg_constraint,installed)
     return found
 end
 
-function manager.copy_installed_pkg(pkg_constraints, source_dir, destination_dir)
-    assert(type(pkg_constraints) == "string" or type(pkg_constraints) == "table", "manager.copy_installed_pkg: Argument 'pkg_constraints' is not a string.")
-    if type(pkg_constraints) == "string" then pkg_constraints = {pkg_constraints} end
-    local installed = manager.get_installed()
+-- Export all files of package installed in the source_dir to destination_dir
+function manager.export_installed_pkg(pkg, source_dir, destination_dir)
 
-    for _, pkg_constraint in pairs(pkg_constraints) do
-        for _, installed_pkg in pairs(installed) do
-        assert(getmetatable(installed_pkg) == rocksolver.Package, "manager.copy_installed_pkg: Argument 'installed' does not contain Package instances.")
-            if installed_pkg:matches(pkg_constraint) then
-                pkg_files = installed_pkg["files"]
-                for _, old_file in pairs(pkg_files) do
-                    local file_rel_path = pl.path.relpath(old_file,source_dir)
-                    local dest_path = pl.path.join(destination_dir,pl.path.dirname(file_rel_path))
-                    pl.dir.makepath(dest_path)
-                    pl.dir.copyfile(old_file,dest_path)
-                end
-            end
-        end
+    log:info("Exporting package " .. pkg.name .. " " .. pkg.version.string)
+    local pkg_files = pkg.files
+
+    -- Copy all files of package to specified directory
+    for _, old_file in pairs(pkg_files) do
+        local file_rel_path = pl.path.relpath(old_file,source_dir)
+        local dest_path = pl.path.join(destination_dir, pl.path.dirname(file_rel_path))
+        pl.dir.copyfile(old_file, dest_path)
+        pl.dir.makepath(dest_path)
     end
 
+    return true
 end
 
 

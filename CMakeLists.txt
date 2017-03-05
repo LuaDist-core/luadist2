@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.1)
 
 project(luadist2 C CXX)
-set(luadist2_VERSION 0.7-2)
+set(luadist2_VERSION 0.7-3)
 
 set(ENV{LUA_DIR} ${CMAKE_INSTALL_PREFIX})
 find_package(Lua REQUIRED)

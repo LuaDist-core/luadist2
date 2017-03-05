@@ -25,13 +25,14 @@ Usage: luadist [DEPLOYMENT_DIRECTORY] <COMMAND> [ARGUMENTS...] [-VARIABLES...]
 
         help      - print this help
         install   - install modules
-        make      - make local module
+        make      - install module from local directory
         remove    - remove modules
         list      - list installed modules
         info      - show information about modules
         search    - search repositories for modules
         depends   - print dependencies of a module
         fetch     - fetch source repository of a module
+        pack      - export installed module
 
     To get help on specific command, run:
 
@@ -430,6 +431,56 @@ Usage: luadist [DOWNLOAD_DIRECTORY] fetch [MODULES...] [-VARIABLES...]
                 end
             end
             return 0
+        end
+    },
+     ["pack"] = {
+        help = [[
+Usage: luadist [DEPLOYMENT_DIRECTORY] pack MODULES... DESTINATION_DIRECTORY
+
+    The 'pack' command will export specified MODULES installed in
+    DEPLOYMENT_DIRECTORY to DESTINATION_DIRECTORY.
+
+    LuaDist will copy all files of MODULES to DESTINATION_DIRECTORY and create
+    rockspec file for every specified module.
+
+
+    If DEPLOYMENT_DIRECTORY is not specified, the deployment directory
+    of LuaDist is used.
+        ]],
+
+        run = function (deploy_dir, modules)
+            deploy_dir = deploy_dir or cfg.root_dir
+
+            assert(type(deploy_dir) == "string", "luadist.pack: Argument 'deploy_dir' is not a string.")
+            assert(type(modules) == "table", "luadist.pack: Argument 'modules' is not a string or table.")
+            deploy_dir = pl.path.abspath(deploy_dir)
+
+
+            if #modules == 0 then
+                print("No destination directory or modules to install specified")
+                return 0
+            elseif #modules < 2 then
+                print("No modules to install specified.")
+                return 0
+            end
+
+            destination_dir = modules[#modules]
+            if pl.path.isdir(destination_dir) then
+                destination_dir = pl.path.abspath(destination_dir)
+                table.remove(modules,#modules)
+            else
+                print (modules[#modules].." is not valid directory path.")
+                return 0
+            end
+
+            local ok, err, status = dist.pack(modules, deploy_dir, destination_dir)
+            if not ok then
+                print(err)
+                os.exit(status)
+            else
+                print("Exported modules successfully.")
+                return 0
+            end
         end
     },
 }

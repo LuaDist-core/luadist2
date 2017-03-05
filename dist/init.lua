@@ -421,6 +421,55 @@ function dist.fetch(download_dir, package_names)
     return downloader.fetch_pkgs(packages, download_dir, manifest.repo_path)
 end
 
+-- Exports all files of 'package_names' installed in 'deploy_dir'
+-- to 'destination_dir' and creates rockspec for each package
+-- Returns true on success and nil, error_message, error_code on error
+-- Error codes:
+-- 1 - 'deploy_dir' doesn't contain any packages
+-- 2 - specified package not found in 'deploy_dir'
+local function _pack(package_names, deploy_dir, destination_dir)
+    -- Get all packages installed in deploy_dir
+    local installed = mgr.get_installed()
+
+    for _, pkg_name in pairs(package_names) do
+        local found = false
+        for _, installed_pkg in pairs(installed) do
+            -- Check if specified deploy_dir contains any packages
+            if not getmetatable(installed_pkg) == rocksolver.Package then
+                return nil, "Argument 'installed' does not contain Package instances.", 1
+            else
+                if installed_pkg:matches(pkg_name) and not found then
+                    found = mgr.export_installed_pkg(installed_pkg, deploy_dir, destination_dir)
+                    local exported_pkg_rockspec = mgr.export_installed_rockspec(pkg, installed)
+                end
+            end
+        end
+        -- Package with specified name isn't installed in specified directory
+        if not found then
+            return nil, "Package " .. pkg_name .. " was not found in specified directory." , 2
+        end
+    end
+
+    return true
+end
+
+-- Public wrapper for 'pack' functionality, ensures correct setting of 'deploy_dir'
+-- and performs argument checks
+function dist.pack(package_names, deploy_dir, destination_dir)
+    if not package_names or not destination_dir then return true end
+    if type(package_names) == "string" then package_names = {package_names} end
+
+    assert(type(package_names) == "table", "dist.pack: Argument 'package_names' is not a table or string.")
+    assert(deploy_dir and type(deploy_dir) == "string", "dist.pack: Argument 'deploy_dir' is not a string.")
+    assert(destination_dir and type(destination_dir) == "string", "dist.pack: Argument 'destination_dir' is not a string.")
+
+    if deploy_dir then cfg.update_root_dir(deploy_dir) end
+    local result, err, status = _pack(package_names, deploy_dir, destination_dir)
+    if deploy_dir then cfg.revert_root_dir() end
+
+    return result, err, status
+end
+
 -- Downloads packages specified in 'package_names' into 'download_dir',
 -- loads their rockspec files and returns table <package, rockspec>
 function dist.get_rockspec(download_dir, package_names)

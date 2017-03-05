@@ -1,7 +1,7 @@
 package = "luadist2"
-version = "0.7-2"
+version = "0.7-3"
 source = {
-    tag = "0.7-2",
+    tag = "0.7-3",
     url = "git://github.com/LuaDist-core/luadist2.git"
 }
 description = {

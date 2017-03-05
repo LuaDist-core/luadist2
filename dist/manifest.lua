@@ -190,7 +190,7 @@ function manifest_module.generate_local_manifest(deploy_dir)
 
     local local_manifest = ordered.Ordered()
 
-    local_manifest["packages"] = {}
+    local_manifest.packages = {}
     local local_rockspec_files = {}
 
     -- get all 'rockspec' files in 'cfg.root_dir' subdirectories,
@@ -214,16 +214,17 @@ function manifest_module.generate_local_manifest(deploy_dir)
             log:error("Local rockspec "..local_rockspec_file.."could not be loaded")
         else
             -- Fetch info about the package from the rockspec
-            local pkg_name = local_rockspec["package"]
-            local pkg_version = local_rockspec["version"]
-            deps = {}
-            deps["dependencies"] = local_rockspec["dependencies"]
+            local pkg_name = local_rockspec.package
+            local pkg_version = local_rockspec.version
+            deps = ordered.Ordered()
 
-            if local_rockspec["supported_platforms"] then
-                deps["supported_platforms"] = local_rockspec["supported_platforms"]
+            if local_rockspec.supported_platforms then
+                deps.supported_platforms = local_rockspec.supported_platforms
             end
 
-            local packages_from_rockspec = local_manifest["packages"]
+            deps.dependencies = local_rockspec.dependencies
+
+            local packages_from_rockspec = local_manifest.packages
 
             -- if there already was other version of package 'pkg name'
             if packages_from_rockspec[pkg_name] then
@@ -231,12 +232,12 @@ function manifest_module.generate_local_manifest(deploy_dir)
             end
 
             pkg[pkg_version] = deps
-            pkg[pkg_version]["local_url"] = pl.path.dirname(local_rockspec_file)
             packages_in_manifest[pkg_name] = pkg
+            pkg[pkg_version].local_url = pl.path.dirname(local_rockspec_file)
         end
-        local_manifest["packages"] = packages_in_manifest
+        local_manifest.packages = packages_in_manifest
     end
-    local_manifest["repo_path"] = deploy_dir
+    local_manifest.repo_path = deploy_dir
 
     return local_manifest
 end

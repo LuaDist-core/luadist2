@@ -16,6 +16,7 @@ dependencies = {
     "rockspec2cmake >= 0.1-1",
     "penlight >= 1.4.1",
     "lua-git >= 0.5-1",
+    "md5 >= 1.2-1",
 }
 build = {
     type = "cmake",

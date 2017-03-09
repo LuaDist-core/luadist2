@@ -8,6 +8,8 @@ local rocksolver = {}
 rocksolver.utils = require "rocksolver.utils"
 rocksolver.Package = require "rocksolver.Package"
 rocksolver.const = require "rocksolver.constraints"
+local md5 = require "md5"
+local ordered = require "dist.ordered"
 
 local manager = {}
 
@@ -155,8 +157,6 @@ function manager.install_pkg(pkg, pkg_dir, variables)
     for line in mf:lines() do
         table.insert(pkg.files, pl.path.relpath(line, cfg.root_dir))
     end
-    -- FIXME is deploy_dir necessary in local maifest?
-    pkg["deploy_dir"] = cfg.root_dir
     mf:close()
 
     -- Cleanup
@@ -243,25 +243,82 @@ function manager.get_installed()
     return manifest
 end
 
-function manager.export_installed_rockspec(pkg, installed)
-
-end
-
 -- Export all files of package installed in the source_dir to destination_dir
 function manager.export_installed_pkg(pkg, source_dir, destination_dir)
 
+    local new_files_rel = ordered.Ordered()
     log:info("Exporting package " .. pkg.name .. " " .. pkg.version.string)
     local pkg_files = pkg.files
 
     -- Copy all files of package to specified directory
     for _, src_rel in pairs(pkg_files) do
+
+        -- Files of packages installed during the bootstraping process have '../_install' prefix in path
+        src_rel = pl.path.relpath(src_rel)
+        table.insert(new_files_rel, src_rel)
+
         local src_abs = pl.path.join(source_dir, src_rel)
         local dest_dir = pl.path.join(destination_dir, pl.path.dirname(src_rel))
         pl.dir.makepath(dest_dir)
         pl.dir.copyfile(src_abs, dest_dir)
     end
 
-    return true
+    return true, new_files_rel
 end
+
+function manager.export_rockspec(pkg, installed, exported_files)
+    local exported_rockspec = pkg.spec
+    exported_rockspec.files = exported_files
+    local dep_hash, bin_deps = manager.generate_dep_hash(pkg.spec.dependencies, installed)
+    exported_rockspec.version = exported_rockspec.version .. " " .. dep_hash
+
+    local deps = ordered.Ordered()
+
+    for _, bin_dep in pairs(bin_deps) do
+        local package, version = rocksolver.const.split(bin_dep)
+        bin_dep = package .. " ~= " .. version
+        table.insert(deps,bin_dep)
+
+    end
+
+    exported_rockspec.dependencies = deps
+
+    exported_rockspec.description.built_on = os.date("%d.%m.%Y")
+
+    return exported_rockspec
+end
+
+
+function manager.generate_dep_hash(pkg_dependencies, installed)
+    local dep_hash = (cfg.platform[1]) .." "
+    local package_names = {}
+
+    for _, dependency in pairs(pkg_dependencies) do
+        local found = false
+        for _, installed_pkg in pairs(installed) do
+            if installed_pkg:matches(dependency) and not found then
+                local parsed_package_const = installed_pkg.name .. " " .. rocksolver.const.parse_major_minor_version(installed_pkg.version)
+                table.insert(package_names, parsed_package_const)
+                found = true
+            end
+        end
+        if not found then
+            return nil, "Package " .. package .. "is not installed."
+        end
+    end
+
+    table.sort(package_names)
+    for _, pkg_name in pairs(package_names) do
+        dep_hash = dep_hash .. pkg_name.. " "
+    end
+
+    if cfg.debug then
+        print ("dependency hash: " .. dep_hash)
+    end
+
+    dep_hash = md5.sumhexa(dep_hash)
+    return dep_hash, package_names
+end
+
 
 return manager

@@ -61,9 +61,9 @@ function manifest_module.download_manifest(manifest_urls)
             local manifest_file = pl.path.join(clone_dir, cfg.manifest_filename)
             current_manifest, err = manifest_module.load_manifest(manifest_file)
         elseif cfg.include_local_repos then
-            current_manifest,err=manifest_module.generate_local_manifest(repo)
+            current_manifest, err = manifest_module.generate_local_manifest(repo)
         else
-            err = "Local repo found. To install from local repos use 'make' command."
+            err = "Local repos are disabled."
         end
 
         if current_manifest then
@@ -188,7 +188,7 @@ function manifest_module.generate_local_manifest(deploy_dir)
     -- Get all subdirectories
     local subdirectories = pl.dir.getdirectories(deploy_dir)
 
-    local local_manifest = ordered.Ordered()
+    local local_manifest = {}
 
     local_manifest.packages = {}
     local local_rockspec_files = {}
@@ -207,14 +207,14 @@ function manifest_module.generate_local_manifest(deploy_dir)
     -- Iterate through all found rockspecs
     for _, local_rockspec_file in pairs(local_rockspec_files) do
 
-        local pkg = {}
-        local local_rockspec = manifest_module.load_rockspec(local_rockspec_file)
+        local local_rockspec, err = manifest_module.load_rockspec(local_rockspec_file)
 
         if not local_rockspec then
-            log:error("Local rockspec "..local_rockspec_file.."could not be loaded")
+            log:error("Local rockspec "..local_rockspec_file.." could not be loaded: ".. err)
         else
             -- Fetch info about the package from the rockspec
             local pkg_name = local_rockspec.package
+
             local pkg_version = local_rockspec.version
             deps = ordered.Ordered()
 
@@ -227,9 +227,7 @@ function manifest_module.generate_local_manifest(deploy_dir)
             local packages_from_rockspec = local_manifest.packages
 
             -- if there already was other version of package 'pkg name'
-            if packages_from_rockspec[pkg_name] then
-                pkg = packages_from_rockspec[pkg_name]
-            end
+            local pkg = packages_from_rockspec[pkg_name] or {}
 
             pkg[pkg_version] = deps
             packages_in_manifest[pkg_name] = pkg

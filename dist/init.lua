@@ -151,7 +151,8 @@ local function _make (deploy_dir,variables, current_dir)
     local installed = mgr.get_installed()
 
     -- Get manifest including the local repos
-    local manifest, err = mf.get_manifest(cfg.include_local_repos)
+    local manifest, err = mf.get_manifest()
+    -- pl.pretty.dump(manifest)
     if not manifest then
         return nil, err, 1
     end
@@ -299,9 +300,7 @@ function dist.make(deploy_dir, variables, current_dir)
     assert(current_dir and type(current_dir) == "string", "dist.make: Argument 'destination_dir' is not a string.")
 
     if deploy_dir then cfg.update_root_dir(deploy_dir) end
-    cfg.include_local_repos = true
     local result, err, status = _make(deploy_dir, variables, current_dir)
-    cfg.include_local_repos = false
     if deploy_dir then cfg.revert_root_dir() end
 
     return result, err, status
@@ -428,25 +427,44 @@ end
 -- 1 - 'deploy_dir' doesn't contain any packages
 -- 2 - specified package not found in 'deploy_dir'
 local function _pack(package_names, deploy_dir, destination_dir)
+
     -- Get all packages installed in deploy_dir
     local installed = mgr.get_installed()
 
     for _, pkg_name in pairs(package_names) do
         local found = false
+
         for _, installed_pkg in pairs(installed) do
+
             -- Check if specified deploy_dir contains any packages
             if not getmetatable(installed_pkg) == rocksolver.Package then
                 return nil, "Argument 'installed' does not contain Package instances.", 1
             else
+                -- Installed package matches 'pkg_name' of packed package
                 if installed_pkg:matches(pkg_name) and not found then
-                    found = mgr.export_installed_pkg(installed_pkg, deploy_dir, destination_dir)
-                    local exported_pkg_rockspec = mgr.export_installed_rockspec(pkg, installed)
+
+                    -- Export package files to 'destination_dir'
+                    destination_dir = pl.path.join(destination_dir, installed_pkg.spec.package .. " " .. installed_pkg.spec.version)
+                    found, file_tab = mgr.export_installed_pkg(installed_pkg, deploy_dir, destination_dir)
+
+                    -- Create rockspec for the installed package
+                    local exported_rockspec = mgr.export_rockspec(installed_pkg, installed, file_tab)
+                    local rockspec_filename = installed_pkg.spec.package .. "-" .. installed_pkg.spec.version ..".rockspec"
+                    local rockspec_path = pl.path.join(destination_dir,rockspec_filename)
+
+                    -- Write rockspec to file
+                    local rockspec_file = io.open(rockspec_path, "w")
+                    for k,v in pairs(exported_rockspec) do
+                        rockspec_file:write(k .. ' = '.. pl.pretty.write(v).."\n")
+                    end
+                    rockspec_file:close()
+
                 end
             end
         end
         -- Package with specified name isn't installed in specified directory
         if not found then
-            return nil, "Package " .. pkg_name .. " was not found in specified directory." , 2
+            return nil, "Package " .. pkg_name .. " not found in specified directory." , 2
         end
     end
 
@@ -456,6 +474,7 @@ end
 -- Public wrapper for 'pack' functionality, ensures correct setting of 'deploy_dir'
 -- and performs argument checks
 function dist.pack(package_names, deploy_dir, destination_dir)
+
     if not package_names or not destination_dir then return true end
     if type(package_names) == "string" then package_names = {package_names} end
 

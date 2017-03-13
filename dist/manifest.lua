@@ -4,6 +4,8 @@ local git = require "dist.git"
 local utils = require "dist.utils"
 local ordered = require "dist.ordered"
 local pl = require "pl.import_into"()
+local rocksolver = {}
+rocksolver.const = require "rocksolver.constraints"
 
 local manifest_module = {}
 
@@ -78,7 +80,7 @@ function manifest_module.download_manifest(manifest_urls)
                 -- Add all versions which were not present in earlier manifests
                 else
                     for version, deps in pairs(info) do
-                        if manifest.packages[pkg][version] == nil then
+                        if manifest.packages[pkg][rocksolver.const.parseVersion(version).string] == nil then
                             manifest.packages[pkg][version] = deps
                         end
                     end

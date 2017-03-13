@@ -284,7 +284,7 @@ function manager.export_rockspec(pkg, installed, exported_files)
     exported_rockspec.dependencies = deps
 
     exported_rockspec.description.built_on = os.date("%d.%m.%Y")
-
+    exported_rockspec.built_on_platform = cfg.platform
     return exported_rockspec
 end
 

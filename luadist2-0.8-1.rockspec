@@ -1,7 +1,7 @@
 package = "luadist2"
-version = "0.7-4"
+version = "0.8-1"
 source = {
-    tag = "0.7-4",
+    tag = "0.8-1",
     url = "git://github.com/LuaDist-core/luadist2.git"
 }
 description = {
@@ -16,6 +16,7 @@ dependencies = {
     "rockspec2cmake >= 0.1-1",
     "penlight >= 1.4.1",
     "lua-git >= 0.5-1",
+    "md5 >= 1.2-1"
 }
 build = {
     type = "cmake",

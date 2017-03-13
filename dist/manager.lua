@@ -270,13 +270,13 @@ function manager.export_rockspec(pkg, installed, exported_files)
     local exported_rockspec = pkg.spec
     exported_rockspec.files = exported_files
     local dep_hash, bin_deps = manager.generate_dep_hash(pkg.spec.dependencies, installed)
-    exported_rockspec.version = exported_rockspec.version .. " " .. dep_hash
+    exported_rockspec.version = exported_rockspec.version .. "_" .. dep_hash
 
     local deps = ordered.Ordered()
 
     for _, bin_dep in pairs(bin_deps) do
         local package, version = rocksolver.const.split(bin_dep)
-        bin_dep = package .. " ~= " .. version
+        bin_dep = package .. " == " .. version
         table.insert(deps,bin_dep)
 
     end
@@ -284,7 +284,7 @@ function manager.export_rockspec(pkg, installed, exported_files)
     exported_rockspec.dependencies = deps
 
     exported_rockspec.description.built_on = os.date("%d.%m.%Y")
-
+    exported_rockspec.built_on_platform = cfg.platform
     return exported_rockspec
 end
 
@@ -317,6 +317,7 @@ function manager.generate_dep_hash(pkg_dependencies, installed)
     end
 
     dep_hash = md5.sumhexa(dep_hash)
+    dep_hash = dep_hash:sub(1,10)
     return dep_hash, package_names
 end
 

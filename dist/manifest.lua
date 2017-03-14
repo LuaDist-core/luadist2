@@ -74,7 +74,11 @@ function manifest_module.download_manifest(manifest_urls)
             for pkg, info in pairs(current_manifest.packages) do
                 -- Current manifest provides new package, add it
                 if manifest.packages[pkg] == nil then
-                    manifest.packages[pkg] = info
+                    -- manifest.packages[pkg] = info
+                    manifest.packages[pkg] = ordered.Ordered()
+                    for version, deps in pairs(info) do
+                        manifest.packages[pkg][version] = deps
+                    end
                 -- Add all versions which were not present in earlier manifests
                 else
                     for version, deps in pairs(info) do

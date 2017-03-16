@@ -133,7 +133,7 @@ Usage: luadist [DEPLOYMENT_DIRECTORY] make [-VARIABLES...]
             assert(type(deploy_dir) == "string", "luadist.make: Argument 'deploy_dir' is not a string.")
             assert(type(cmake_variables) == "table", "luadist.make: Argument 'cmake_variables' is not a table.")
 
-            local ok, err, status = dist.make(deploy_dir, cmake_variables,current_dir)
+            local ok, err, status = dist.make(deploy_dir, cmake_variables, current_dir)
             if not ok then
                 print(err)
                 os.exit(status)

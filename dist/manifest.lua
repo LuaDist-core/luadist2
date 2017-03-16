@@ -191,9 +191,8 @@ function manifest_module.generate_local_manifest(deploy_dir)
     -- Get all subdirectories
     local subdirectories = pl.dir.getdirectories(deploy_dir)
 
-    local local_manifest = {}
-
-    local_manifest.packages = {}
+    -- Create empty manifest
+    local local_manifest = {repo_path = {}, packages = {}}
     local local_rockspec_files = {}
 
     -- get all 'rockspec' files in 'cfg.root_dir' subdirectories,
@@ -230,11 +229,11 @@ function manifest_module.generate_local_manifest(deploy_dir)
             local packages_from_rockspec = local_manifest.packages
 
             -- if there already was other version of package 'pkg name'
-            local pkg = packages_from_rockspec[pkg_name] or {}
+            local info = packages_from_rockspec[pkg_name] or ordered.Ordered()
 
-            pkg[pkg_version] = deps
-            packages_in_manifest[pkg_name] = pkg
-            pkg[pkg_version].local_url = pl.path.dirname(local_rockspec_file)
+            info[pkg_version] = deps
+            packages_in_manifest[pkg_name] = info
+            info[pkg_version].local_url = pl.path.dirname(local_rockspec_file)
         end
         local_manifest.packages = packages_in_manifest
     end

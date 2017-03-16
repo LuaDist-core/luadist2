@@ -98,15 +98,31 @@ local function _install(package_names, variables)
         end
     end
 
+    -- Table contains pairs <package, package directory>
+    local package_directories = ordered.Ordered()
 
-    -- Fetch the packages from repository
-    local dirs, err = downloader.fetch_pkgs(dependencies, cfg.temp_dir_abs, manifest.repo_path)
-    if not dirs then
-        return nil, "Error downloading packages: " .. err, 3
+    for _, pkg in pairs(dependencies) do
+        local pkg_name, pkg_version = rocksolver.const.split(tostring(pkg))
+
+        -- Extract local url from package, if any
+        local local_url = manifest.packages
+        local_url = local_url[pkg_name][pkg_version]
+        local_url = local_url.local_url
+
+        -- Package with local url
+        if local_url then
+            log:info("Package ".. pkg .. " will be installed from local url " .. local_url)
+            package_directories[pkg] = local_url
+
+        --  Package fetched from remote repo
+        else
+            local dirs, err = downloader.fetch_pkgs({pkg}, cfg.temp_dir_abs, manifest.repo_path)
+            package_directories[pkg] = dirs[pkg]
+        end
     end
 
-    -- Install fetched packages
-    for pkg, dir in pairs(dirs) do
+    -- Install packages
+    for pkg, dir in pairs(package_directories) do
         ok, err = mgr.install_pkg(pkg, dir, variables)
         if not ok then
             return nil, "Error installing: " ..err, (utils.name_matches(tostring(pkg), package_names, true) and 4) or 5
@@ -152,7 +168,6 @@ local function _make (deploy_dir,variables, current_dir)
 
     -- Get manifest including the local repos
     local manifest, err = mf.get_manifest()
-    -- pl.pretty.dump(manifest)
     if not manifest then
         return nil, err, 1
     end
@@ -173,7 +188,7 @@ local function _make (deploy_dir,variables, current_dir)
     end
 
     local maked_pkg_rockspec =mf.load_rockspec(rockspec_files[1])
-    local maked_pkg = maked_pkg_rockspec["package"] .. " " .. maked_pkg_rockspec["version"]
+    local maked_pkg = maked_pkg_rockspec.package .. " " .. maked_pkg_rockspec.version
     package_names = {maked_pkg}
 
     local function resolve_dependencies(package_names, _installed, preinstall_lua)
@@ -244,9 +259,9 @@ local function _make (deploy_dir,variables, current_dir)
         local pkg_name, pkg_version = rocksolver.const.split(tostring(pkg))
 
         -- Extract local url from package, if any
-        local local_url = manifest["packages"]
+        local local_url = manifest.packages
         local_url = local_url[pkg_name][pkg_version]
-        local_url = local_url["local_url"]
+        local_url = local_url.local_url
 
         -- Maked package
         if tostring(pkg) == maked_pkg then
@@ -297,7 +312,7 @@ end
 -- Local repositories are also searched when LuaDist searches for the missing dependencies
 function dist.make(deploy_dir, variables, current_dir)
     assert(deploy_dir and type(deploy_dir) == "string", "dist.make: Argument 'deploy_dir' is not a string.")
-    assert(current_dir and type(current_dir) == "string", "dist.make: Argument 'destination_dir' is not a string.")
+    assert(current_dir and type(current_dir) == "string", "dist.make: Argument 'current_dir' is not a string.")
 
     if deploy_dir then cfg.update_root_dir(deploy_dir) end
     local result, err, status = _make(deploy_dir, variables, current_dir)
@@ -442,10 +457,12 @@ local function _pack(package_names, deploy_dir, destination_dir)
             else
                 -- Installed package matches 'pkg_name' of packed package
                 if installed_pkg:matches(pkg_name) and not found then
+                    found = true
 
                     -- Export package files to 'destination_dir'
-                    destination_dir = pl.path.join(destination_dir, installed_pkg.spec.package .. " " .. installed_pkg.spec.version)
-                    found, file_tab = mgr.export_installed_pkg(installed_pkg, deploy_dir, destination_dir)
+                    local dep_hash = mgr.generate_dep_hash(installed_pkg.spec.dependencies,installed)
+                    destination_dir = pl.path.join(destination_dir, installed_pkg.spec.package .. " " .. installed_pkg.spec.version .."_" .. dep_hash)
+                    file_tab = mgr.copy_pkg(installed_pkg, deploy_dir, destination_dir)
 
                     -- Create rockspec for the installed package
                     local exported_rockspec = mgr.export_rockspec(installed_pkg, installed, file_tab)

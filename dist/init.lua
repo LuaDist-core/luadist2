@@ -133,6 +133,12 @@ local function _install(package_names, variables)
         mgr.save_installed(installed)
     end
 
+    for pkg, dir in pairs(package_directories) do
+        -- pl.pretty.dump(pkg:dependencies(cfg.platform))
+        pkg.bin_dependencies = mgr.generate_bin_dependencies(pkg.spec.dependencies, installed)
+        mgr.save_installed(installed)
+    end
+
     return true
 end
 
@@ -301,6 +307,12 @@ local function _make (deploy_dir,variables, current_dir)
 
         -- If installation was successful, update local manifest
         table.insert(installed, pkg)
+        mgr.save_installed(installed)
+    end
+
+    for pkg, dir in pairs(package_directories) do
+        -- pl.pretty.dump(pkg:dependencies(cfg.platform))
+        pkg.bin_dependencies = mgr.generate_bin_dependencies(pkg.spec.dependencies, installed)
         mgr.save_installed(installed)
     end
 

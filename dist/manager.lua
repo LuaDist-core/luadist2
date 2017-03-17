@@ -110,6 +110,7 @@ function manager.install_pkg(pkg, pkg_dir, variables)
 
     pkg.spec = rockspec
 
+    -- Binary package
     if pkg.spec.files then
         pkg.files = rocksolver.utils.deepcopy(pkg.spec.files)
         pkg.spec.files = nil
@@ -122,7 +123,6 @@ function manager.install_pkg(pkg, pkg_dir, variables)
             pl.dir.rmtree(pkg_dir)
         end
 
-        pkg.bin_dependencies = manager.generate_bin_dependencies(pkg:dependencies(cfg.platform), manager.get_installed())
         pkg.spec.description.built_on = os.date("%d. %m. %Y")
         pkg.built_on_platform = cfg.platform[1]
 
@@ -178,7 +178,6 @@ function manager.install_pkg(pkg, pkg_dir, variables)
     end
     mf:close()
 
-    pkg.bin_dependencies = manager.generate_bin_dependencies(pkg:dependencies(cfg.platform), manager.get_installed())
     pkg.spec.description.built_on = os.date("%d. %m. %Y")
     pkg.built_on_platform = cfg.platform[1]
 
@@ -320,7 +319,10 @@ function manager.export_rockspec(pkg, installed, exported_files)
     local bin_deps = pkg.bin_dependencies
     for _, bin_dep in pairs(bin_deps) do
         local package, version = rocksolver.const.split(bin_dep)
-        bin_dep = package .. " == " .. version
+        local parsedVersion = rocksolver.const.parseVersion(version)
+        local major, minor = rocksolver.const.parse_major_minor_version(parsedVersion)
+
+        bin_dep = package .. " >= " .. major.. "." ..minor..", < ".. major .. "." ..(minor+1)
         table.insert(deps, bin_dep)
     end
 
@@ -338,8 +340,6 @@ end
 function manager.generate_dep_hash(pkg_dependencies, installed)
     local dep_hash = (cfg.platform[1]) .. " "
     local package_names = manager.generate_bin_dependencies(pkg_dependencies, installed)
-
-    pl.pretty.dump(package_names)
 
     for _, pkg_name in pairs(package_names) do
         dep_hash = dep_hash .. pkg_name .. " "
@@ -362,7 +362,8 @@ function manager.generate_bin_dependencies(pkg_dependencies, installed)
         local found = false
         for _, installed_pkg in pairs(installed) do
             if installed_pkg:matches(dependency) and not found then
-                local parsed_package_const = installed_pkg.name .. " " .. rocksolver.const.parse_major_minor_version(installed_pkg.version)
+                local major, minor = rocksolver.const.parse_major_minor_version(installed_pkg.version)
+                local parsed_package_const = installed_pkg.name .. " " .. major .. "." .. minor
                 table.insert(package_names, parsed_package_const)
                 found = true
             end

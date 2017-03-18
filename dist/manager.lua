@@ -8,7 +8,6 @@ local rocksolver = {}
 rocksolver.utils = require "rocksolver.utils"
 rocksolver.Package = require "rocksolver.Package"
 rocksolver.const = require "rocksolver.constraints"
-local md5 = require "md5"
 local ordered = require "dist.ordered"
 
 local manager = {}
@@ -311,7 +310,7 @@ function manager.export_rockspec(pkg, installed, exported_files)
     exported_rockspec.files = exported_files
 
     -- Generate dependency hash for binary package, get binary compatible versions of dependencies for 'pkg'.
-    local dep_hash = manager.generate_dep_hash(pkg.spec.dependencies, installed)
+    local dep_hash = rocksolver.utils.generate_dep_hash(cfg.platform, pkg.spec.dependencies, installed)
     exported_rockspec.version = exported_rockspec.version .. "_" .. dep_hash
 
     local deps = ordered.Ordered()
@@ -331,51 +330,6 @@ function manager.export_rockspec(pkg, installed, exported_files)
     -- Platform, which was package built on
     exported_rockspec.built_on_platform = pkg.built_on_platform
     return exported_rockspec
-end
-
--- Generates md5 hash for of binary package. Hashed string contains platform,which it was built on,names and binary compatible versions
--- (major and minor) of installed dependencies of package. E.g. if package xy has dependencies 'lua' and 'luasocket',
--- and they are installed in versions 'lua 5.2.4-1' and luasocket '3.0rc1-2' on unix platform, hashed string will
--- look like this: 'unix lua 5.2 luasocket 3.0 '
-function manager.generate_dep_hash(pkg_dependencies, installed)
-    local dep_hash = (cfg.platform[1]) .. " "
-    local package_names = manager.generate_bin_dependencies(pkg_dependencies, installed)
-
-    for _, pkg_name in pairs(package_names) do
-        dep_hash = dep_hash .. pkg_name .. " "
-    end
-
-    if cfg.debug then
-        print ("dependency hash: " .. dep_hash)
-    end
-
-    dep_hash = md5.sumhexa(dep_hash)
-    dep_hash = dep_hash:sub(1,10)
-    return dep_hash
-end
-
-function manager.generate_bin_dependencies(pkg_dependencies, installed)
-    local package_names = {}
-
-
-    for _, dependency in pairs(pkg_dependencies) do
-        local found = false
-        for _, installed_pkg in pairs(installed) do
-            if installed_pkg:matches(dependency) and not found then
-                local major, minor = rocksolver.const.parse_major_minor_version(installed_pkg.version)
-                local parsed_package_const = installed_pkg.name .. " " .. major .. "." .. minor
-                table.insert(package_names, parsed_package_const)
-                found = true
-            end
-        end
-        if not found then
-            log:info("Binary dependency "..dependency.." is not installed.")
-        end
-    end
-
-    table.sort(package_names)
-
-    return package_names
 end
 
 return manager

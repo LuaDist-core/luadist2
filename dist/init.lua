@@ -135,7 +135,7 @@ local function _install(package_names, variables)
 
     for pkg, dir in pairs(package_directories) do
         -- pl.pretty.dump(pkg:dependencies(cfg.platform))
-        pkg.bin_dependencies = mgr.generate_bin_dependencies(pkg.spec.dependencies, installed)
+        pkg.bin_dependencies = rocksolver.utils.generate_bin_dependencies(pkg.spec.dependencies, installed)
         mgr.save_installed(installed)
     end
 
@@ -312,7 +312,7 @@ local function _make (deploy_dir,variables, current_dir)
 
     for pkg, dir in pairs(package_directories) do
         -- pl.pretty.dump(pkg:dependencies(cfg.platform))
-        pkg.bin_dependencies = mgr.generate_bin_dependencies(pkg.spec.dependencies, installed)
+        pkg.bin_dependencies = rocksolver.utils.generate_bin_dependencies(pkg.spec.dependencies, installed)
         mgr.save_installed(installed)
     end
 
@@ -472,7 +472,7 @@ local function _pack(package_names, deploy_dir, destination_dir)
                     found = true
 
                     -- Export package files to 'destination_dir'
-                    local dep_hash = mgr.generate_dep_hash(installed_pkg.spec.dependencies,installed)
+                    local dep_hash = rocksolver.utils.generate_dep_hash(cfg.platform, installed_pkg.spec.dependencies, installed)
                     destination_dir = pl.path.join(destination_dir, installed_pkg.spec.package .. " " .. installed_pkg.spec.version .."_" .. dep_hash)
                     file_tab = mgr.copy_pkg(installed_pkg, deploy_dir, destination_dir)
 

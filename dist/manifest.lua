@@ -60,7 +60,7 @@ function manifest_module.download_manifest(manifest_urls)
 
             local manifest_file = pl.path.join(clone_dir, cfg.manifest_filename)
             current_manifest, err = manifest_module.load_manifest(manifest_file)
-        elseif cfg.include_local_repos then
+        elseif cfg.include_local_repos and not current_manifest then
             current_manifest, err = manifest_module.generate_local_manifest(repo)
         else
             err = "Local repos are disabled."

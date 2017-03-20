@@ -97,6 +97,7 @@ function manifest_module.download_manifest(manifest_urls)
             pl.dir.rmtree(clone_dir)
 
         end
+        current_manifest = nil
     end
     -- Save the new manifest table to file for debug purposes
     if cfg.debug then

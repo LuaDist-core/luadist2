@@ -321,7 +321,7 @@ function manager.export_rockspec(pkg, installed, exported_files)
         local parsedVersion = rocksolver.const.parseVersion(version)
         local major, minor = rocksolver.const.parse_major_minor_version(parsedVersion)
 
-        bin_dep = package .. " >= " .. major.. "." ..minor..", < ".. major .. "." ..(minor+1)
+        bin_dep = package .. " ~> " .. major.. "." ..minor
         table.insert(deps, bin_dep)
     end
 

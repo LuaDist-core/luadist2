@@ -22,10 +22,8 @@ local_manifest_file = pl.path.join(share_dir, manifest_filename)
 
 -- Repositories ------------------------------------------------------
 manifest_repos = {
-    -- Local directories. They are scanned, when searching for
-    -- packages present in local filesystem.
-    -- Note: local flesystem dirs must be stated as absolute path and put before git
-    -- manifests.
+    -- Note: you can also install packages from local directories. They are scanned, when searching for
+    -- packages present in local filesystem. Local flesystem dirs must be stated as absolute path.
 
     -- Manually updated core manifest, contains lua, lua-git, zlib packages and
     -- everything other that should not go through LuaRocks management

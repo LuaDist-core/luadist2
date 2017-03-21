@@ -134,9 +134,14 @@ local function _install(package_names, variables)
     end
 
     for pkg, dir in pairs(package_directories) do
-        -- pl.pretty.dump(pkg:dependencies(cfg.platform))
-        pkg.bin_dependencies = rocksolver.utils.generate_bin_dependencies(pkg.spec.dependencies, installed)
-        mgr.save_installed(installed)
+        local bin_deps, err, dep = rocksolver.utils.generate_bin_dependencies(pkg:dependencies(cfg.platform), installed)
+        if not err then
+            pkg.bin_dependencies = bin_deps
+            mgr.save_installed(installed)
+        else
+            log:error("Error: binary dependency "..dependency.." for package ".. tostring(pkg).." not satisfied.")
+        end
+
     end
 
     return true

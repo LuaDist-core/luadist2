@@ -456,6 +456,7 @@ Usage: luadist [DEPLOYMENT_DIRECTORY] pack MODULES... DESTINATION_DIRECTORY
             deploy_dir = pl.path.abspath(deploy_dir)
 
 
+
             if #modules == 0 then
                 print("No destination directory or modules to install specified")
                 return 0
@@ -465,13 +466,8 @@ Usage: luadist [DEPLOYMENT_DIRECTORY] pack MODULES... DESTINATION_DIRECTORY
             end
 
             destination_dir = modules[#modules]
-            if pl.path.isdir(destination_dir) then
-                destination_dir = pl.path.abspath(destination_dir)
-                table.remove(modules,#modules)
-            else
-                print (modules[#modules].." is not valid directory path.")
-                return 0
-            end
+            table.remove(modules,#modules)
+            destination_dir = pl.path.abspath(destination_dir)
 
             local ok, err, status = dist.pack(modules, deploy_dir, destination_dir)
             if not ok then

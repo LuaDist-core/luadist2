@@ -475,12 +475,12 @@ local function _pack(package_names, deploy_dir, destination_dir)
 
                     -- Export package files to 'destination_dir'
                     local dep_hash = rocksolver.utils.generate_dep_hash(cfg.platform, installed_pkg.spec.dependencies, installed)
-                    destination_dir = pl.path.join(destination_dir, installed_pkg.spec.package .. " " .. installed_pkg.spec.version .."_" .. dep_hash)
+                    destination_dir = pl.path.join(destination_dir, installed_pkg.name .. " " .. installed_pkg.spec.version .."_" .. dep_hash)
                     file_tab = mgr.copy_pkg(installed_pkg, deploy_dir, destination_dir)
 
                     -- Create rockspec for the installed package
                     local exported_rockspec = mgr.export_rockspec(installed_pkg, installed, file_tab)
-                    local rockspec_filename = installed_pkg.spec.package .. "-" .. installed_pkg.spec.version ..".rockspec"
+                    local rockspec_filename = installed_pkg.name .. "-" .. installed_pkg.spec.version ..".rockspec"
                     local rockspec_path = pl.path.join(destination_dir,rockspec_filename)
 
                     -- Write rockspec to file

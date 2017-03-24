@@ -216,7 +216,7 @@ function manifest_module.generate_local_manifest(deploy_dir)
             log:error("Local rockspec "..local_rockspec_file.." could not be loaded: ".. err)
         else
             -- Fetch info about the package from the rockspec
-            local pkg_name = local_rockspec.package
+            local pkg_name = local_rockspec.package:lower()
 
             local pkg_version = local_rockspec.version
             deps = ordered.Ordered()

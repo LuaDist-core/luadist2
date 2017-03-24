@@ -116,7 +116,7 @@ function manager.install_pkg(pkg, pkg_dir, variables)
         pkg.spec.version = rocksolver.const.splitVersionAndHash(pkg.version.string)
         pkg.version.string =pkg.spec.version
         print("Installing binary package " .. pl.path.basename(pkg_dir))
-        manager.copy_pkg(pkg, pkg_dir, cfg.root_dir)
+        manager.copy_pkg(pkg, pkg_dir, cfg.root_dir_abs)
 
         if not cfg.debug then
             pl.dir.rmtree(pkg_dir)
@@ -272,7 +272,7 @@ function manager.copy_pkg(pkg, source_dir, destination_dir)
 
     local new_files_rel = ordered.Ordered()
 
-    log:info("Copying package " .. pkg.spec.package .. " " .. pkg.spec.version)
+    log:info("Copying package " .. pkg.name .. " " .. pkg.spec.version)
     local pkg_files = pkg.files
 
 

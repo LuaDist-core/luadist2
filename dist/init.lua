@@ -135,13 +135,9 @@ local function _install(package_names, variables)
 
     for pkg, dir in pairs(package_directories) do
         local bin_deps, err, dep = rocksolver.utils.generate_bin_dependencies(pkg:dependencies(cfg.platform), installed)
-        if not err then
             pkg.bin_dependencies = bin_deps
             mgr.save_installed(installed)
-        else
-            log:error("Error: binary dependency "..dependency.." for package ".. tostring(pkg).." not satisfied.")
-        end
-
+            if err then log:error(err) end
     end
 
     return true
@@ -316,9 +312,10 @@ local function _make (deploy_dir,variables, current_dir)
     end
 
     for pkg, dir in pairs(package_directories) do
-        -- pl.pretty.dump(pkg:dependencies(cfg.platform))
-        pkg.bin_dependencies = rocksolver.utils.generate_bin_dependencies(pkg.spec.dependencies, installed)
-        mgr.save_installed(installed)
+        local bin_deps, err, dep = rocksolver.utils.generate_bin_dependencies(pkg:dependencies(cfg.platform), installed)
+            pkg.bin_dependencies = bin_deps
+            mgr.save_installed(installed)
+            if err then log:error(err) end
     end
 
     return true

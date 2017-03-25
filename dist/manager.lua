@@ -173,7 +173,7 @@ function manager.install_pkg(pkg, pkg_dir, variables)
     end
 
     for line in mf:lines() do
-        table.insert(pkg.files, pl.path.relpath(line, cfg.root_dir))
+        table.insert(pkg.files, pl.path.relpath(line, cfg.root_dir_abs))
     end
     mf:close()
 
@@ -205,7 +205,7 @@ function manager.remove_pkg(pkg)
 
     -- Remove installed files
     for _, file in pairs(pkg.files) do
-        file = pl.path.join(cfg.root_dir, file)
+        file = pl.path.join(cfg.root_dir_abs, file)
         if pl.path.exists(file) then
             pl.file.delete(file)
 

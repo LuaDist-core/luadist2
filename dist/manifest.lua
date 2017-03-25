@@ -205,7 +205,7 @@ function manifest_module.generate_local_manifest(deploy_dir)
         end
     end
 
-    local packages_in_manifest = {}
+    local packages_in_manifest = ordered.Ordered()
 
     -- Iterate through all found rockspecs
     for _, local_rockspec_file in pairs(local_rockspec_files) do
@@ -239,7 +239,6 @@ function manifest_module.generate_local_manifest(deploy_dir)
         local_manifest.packages = packages_in_manifest
     end
     local_manifest.repo_path = deploy_dir
-
     return local_manifest
 end
 

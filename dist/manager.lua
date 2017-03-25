@@ -271,9 +271,14 @@ end
 function manager.copy_pkg(pkg, source_dir, destination_dir)
 
     local new_files_rel = ordered.Ordered()
+    local pkg_files = pkg.files
+
+    if #pkg_files == 0 then
+      err = "Package has no files to be exported (probably incorrect rockspec or record in manifest)."
+      return nil, err
+    end
 
     log:info("Copying package " .. pkg.name .. " " .. pkg.spec.version)
-    local pkg_files = pkg.files
 
 
     -- Copy all files of package to specified directory
@@ -310,7 +315,7 @@ function manager.export_rockspec(pkg, installed, exported_files)
     exported_rockspec.files = exported_files
 
     -- Generate dependency hash for binary package, get binary compatible versions of dependencies for 'pkg'.
-    local dep_hash = rocksolver.utils.generate_dep_hash(cfg.platform, pkg.spec.dependencies, installed)
+    local dep_hash = rocksolver.utils.generate_dep_hash(cfg.platform, pkg:dependencies(cfg.platform), installed)
     exported_rockspec.version = exported_rockspec.version .. "_" .. dep_hash
 
     local deps = ordered.Ordered()

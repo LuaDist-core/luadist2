@@ -136,7 +136,6 @@ local function _install(package_names, variables)
     -- Mark binary dependencies of current package present in the time of installation
     for pkg, dir in pairs(package_directories) do
         local bin_deps, err = rocksolver.utils.generate_bin_dependencies(pkg:dependencies(cfg.platform), installed)
-        pl.pretty.dump(bin_deps)
             -- save bin dependencies of package
             pkg.bin_dependencies = bin_deps
             mgr.save_installed(installed)

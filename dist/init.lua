@@ -136,12 +136,10 @@ local function _install(package_names, variables)
     -- Mark binary dependencies of current package present in the time of installation
     for pkg, dir in pairs(package_directories) do
         local bin_deps, err = rocksolver.utils.generate_bin_dependencies(pkg:dependencies(cfg.platform), installed)
+        pl.pretty.dump(bin_deps)
             -- save bin dependencies of package
             pkg.bin_dependencies = bin_deps
             mgr.save_installed(installed)
-            -- Probably package don't have the same dependencies in the manifest and in the rockspec file. We just inform the user,
-            -- it's up to maintainers of fix the rockspec file or to state correct dependencies in the manifest
-            if err then log:error(err) end
     end
 
     return true
@@ -318,13 +316,10 @@ local function _make (deploy_dir,variables, current_dir)
 
     -- Mark binary dependencies of current package present in the time of installation
     for pkg, dir in pairs(package_directories) do
-        local bin_deps, err = rocksolver.utils.generate_bin_dependencies(pkg:dependencies(cfg.platform), installed)
+        local bin_deps = rocksolver.utils.generate_bin_dependencies(pkg:dependencies(cfg.platform), installed)
             -- save bin dependencies of package
             pkg.bin_dependencies = bin_deps
             mgr.save_installed(installed)
-            -- Probably package don't have the same dependencies in the manifest and in the rockspec file. We just inform the user,
-            -- it's up to maintainers of fix the rockspec file or to state correct dependencies in the manifest.
-            if err then log:error(err) end
     end
 
     return true

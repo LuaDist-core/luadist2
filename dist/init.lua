@@ -136,7 +136,6 @@ local function _install(package_names, variables)
     -- Mark binary dependencies of current package present in the time of installation
     for pkg, dir in pairs(package_directories) do
         local bin_deps, err = rocksolver.utils.generate_bin_dependencies(pkg:dependencies(cfg.platform), installed)
-        pl.pretty.dump(bin_deps)
             -- save bin dependencies of package
             pkg.bin_dependencies = bin_deps
             mgr.save_installed(installed)
@@ -458,7 +457,6 @@ end
 -- Returns true on success and nil, error_message, error_code on error
 -- Error codes:
 -- 1 - 'deploy_dir' doesn't contain any packages
--- 2 - specified package not found in 'deploy_dir'
 local function _pack(package_names, deploy_dir, destination_dir)
 
     -- Get all packages installed in deploy_dir
@@ -502,7 +500,7 @@ local function _pack(package_names, deploy_dir, destination_dir)
         end
         -- Package with specified name isn't installed in specified directory
         if not found then
-            return nil, "Package " .. pkg_name .. " not found in specified directory." , 2
+            print("Package " .. pkg_name .. " not found in specified directory.")
         end
     end
 

@@ -462,10 +462,17 @@ local function _pack(package_names, deploy_dir, destination_dir)
     -- Get all packages installed in deploy_dir
     local installed = mgr.get_installed()
 
+    -- Store original destination_dir
+    local temp_dest_dir = destination_dir
+
+
     for _, pkg_name in pairs(package_names) do
         local found = false
 
         for _, installed_pkg in pairs(installed) do
+
+            -- Restore original destination_dir
+            temp_dest_dir = destination_dir
 
             -- Check if specified deploy_dir contains any packages
             if not getmetatable(installed_pkg) == rocksolver.Package then
@@ -475,10 +482,10 @@ local function _pack(package_names, deploy_dir, destination_dir)
                 if installed_pkg:matches(pkg_name) and not found then
                     found = true
 
-                    -- Export package files to 'destination_dir'
+                    -- Export package files to 'temp_dest_dir'
                     local dep_hash = rocksolver.utils.generate_dep_hash(cfg.platform, installed_pkg:dependencies(cfg.platform), installed)
-                    destination_dir = pl.path.join(destination_dir, installed_pkg.name .. " " .. installed_pkg.spec.version .."_" .. dep_hash)
-                    file_tab, err = mgr.copy_pkg(installed_pkg, deploy_dir, destination_dir)
+                    temp_dest_dir = pl.path.join(temp_dest_dir, installed_pkg.name .. " " .. installed_pkg.spec.version .."_" .. dep_hash)
+                    file_tab, err = mgr.copy_pkg(installed_pkg, deploy_dir, temp_dest_dir)
 
                     if not file_tab then
                         return nil, err
@@ -486,7 +493,7 @@ local function _pack(package_names, deploy_dir, destination_dir)
                     -- Create rockspec for the installed package
                     local exported_rockspec = mgr.export_rockspec(installed_pkg, installed, file_tab)
                     local rockspec_filename = installed_pkg.name .. "-" .. installed_pkg.spec.version ..".rockspec"
-                    local rockspec_path = pl.path.join(destination_dir,rockspec_filename)
+                    local rockspec_path = pl.path.join(temp_dest_dir ,rockspec_filename)
 
                     -- Write rockspec to file
                     local rockspec_file = io.open(rockspec_path, "w")

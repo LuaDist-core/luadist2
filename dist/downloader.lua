@@ -9,7 +9,7 @@ local downloader = {}
 
 -- Fetches packages (table 'packages') to 'download_dir' from 'repo_paths'
 -- Returns table of <Package, path to download directory> or nil and an error message on error
-function downloader.fetch_pkgs(packages, download_dir, repo_paths)
+function downloader.fetch_pkgs(packages, download_dir, repo_paths, not_versions)
     assert(type(packages) == "table", "downloader.fetch_pkgs: Argument 'packages' is not a table.")
     assert(type(download_dir) == "string" and pl.path.isabs(download_dir), "downloader.fetch_pkgs: Argument 'download_dir' is not an absolute path.")
     assert(type(repo_paths) == "table", "downloader.fetch_pkgs: Argument 'repo_paths' is not a table.")
@@ -19,7 +19,12 @@ function downloader.fetch_pkgs(packages, download_dir, repo_paths)
     for _, pkg in pairs(packages) do
         assert(getmetatable(pkg) == Package, "downloader.fetch_pkgs: Argument 'packages' does not contain Package instances.")
 
-        local clone_dir = pl.path.join(download_dir, tostring(pkg))
+        local clone_dir = ""
+        if not_versions == true then
+            clone_dir = pl.path.join(download_dir, tostring(pkg.name))
+        else
+            clone_dir = pl.path.join(download_dir, tostring(pkg))
+        end
 
         -- Delete clone_dir if it already exists
         if pl.path.exists(clone_dir) then
@@ -71,3 +76,4 @@ function downloader.fetch_pkgs(packages, download_dir, repo_paths)
 end
 
 return downloader
+

@@ -33,6 +33,8 @@ Usage: luadist [DEPLOYMENT_DIRECTORY] <COMMAND> [ARGUMENTS...] [-VARIABLES...]
         depends   - print dependencies of a module
         fetch     - fetch source repository of a module
         pack      - export installed module
+        static    - prepare static build for modules
+
 
     To get help on specific command, run:
 
@@ -479,6 +481,54 @@ Usage: luadist [DEPLOYMENT_DIRECTORY] pack MODULES... DESTINATION_DIRECTORY
             end
         end
     },
+
+    ["static"] = {
+        help = [[
+Usage: luadist DEPLOYMENT_DIRECTORY static MODULES... [-VARIABLES...]
+    The 'static' command will create static build for specified MODULES into
+    DEPLOYMENT_DIRECTORY.LuaDist will also automatically resolve, download
+    and prepare all dependencies for static build.
+    DEPLOYMENT_DIRECTORY is required in this command.
+    Optional CMake VARIABLES in -D format (e.g. -Dvariable=value) or LuaDist
+    configuration VARIABLES (e.g. -variable=value) can be specified.
+        ]],
+
+        instructions = [[
+---------------------------------------------------------------
+To complete static build do next steps:
+    $ mkdir _build && cd _build
+    $ cmake ..
+    $ make
+    $ ./slua]],
+
+        run = function (dest_dir, modules, cmake_variables)
+            if dest_dir == nil then 
+                print(commands["static"].help) 
+                os.exit(1)
+            end
+            if type(modules) == "string" then modules = {modules} end
+            cmake_variables = cmake_variables or {}
+
+            assert(type(dest_dir) == "string", "luadist.stacit: Argument 'deploy_dir' is not a string.")
+            assert(type(modules) == "table", "luadist.stacit: Argument 'modules' is not a string or table.")
+            assert(type(cmake_variables) == "table", "luadist.stacit: Argument 'cmake_variables' is not a table.")
+
+            if #modules == 0 then
+                print("No modules to create static build specified.")
+                return 0
+            end
+
+            local ok, err, status = dist.static(modules, dest_dir, cmake_variables)
+            if not ok then
+                print(err)
+                os.exit(status)
+            else
+                print("Static build successfully prepared.")
+                print(commands["static"].instructions) 
+                return 0
+            end
+        end
+    },
 }
 
 -- Run the functionality of LuaDist 'command' in the 'deploy_dir' with other items
@@ -596,3 +646,4 @@ else
     end
     return print_help()
 end
+

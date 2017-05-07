@@ -14,6 +14,7 @@ rocksolver.DependencySolver = require "rocksolver.DependencySolver"
 rocksolver.Package = require "rocksolver.Package"
 rocksolver.const = require "rocksolver.constraints"
 rocksolver.utils = require "rocksolver.utils"
+local r2cmake = require 'rockspec2cmake'
 
 local dist = {}
 
@@ -157,6 +158,131 @@ function dist.install(package_names, deploy_dir, variables)
     local result, err, status = _install(package_names, variables)
     if deploy_dir then cfg.revert_root_dir() end
 
+    return result, err, status
+end
+
+-- Staticly build 'package_names' into 'dest_dir' using optional CMake 'variables',
+-- returns true on success and nil, error_message, error_code on error
+-- Error codes:
+-- 1 - manifest retrieval failed
+-- 2 - dependency resolving failed
+-- 3 - repositary download failed
+-- 4 - rockspec load failed
+-- 5 - r2cmake process failed
+-- 6 - main CMakeList.txt file creation failed
+-- 7 - creation of modules.c.in file failed
+local function _static(package_names, dest_dir, variables)
+
+    -- Nothing is instaled for static build
+    local installed = {} 
+
+    -- Get manifest
+    local manifest, err = mf.get_manifest()
+    if not manifest then
+        return nil, err, 1
+    end
+
+    local solver = rocksolver.DependencySolver(manifest, cfg.platform)
+
+    local function resolve_dependencies(package_names, _installed, preinstall_lua)
+        local dependencies = ordered.Ordered()
+        local installed = rocksolver.utils.deepcopy(_installed)
+
+        if preinstall_lua then
+            table.insert(installed, preinstall_lua)
+        end
+
+        for _, package_name in pairs(package_names) do
+            -- Resolve dependencies
+            local new_dependencies, err = solver:resolve_dependencies(package_name, installed)
+
+            if err then
+                return nil, err
+            end
+
+            -- Update dependencies to install with currently found ones and update installed packages
+            -- for next dependency resolving as if previously found dependencies were already installed
+            for _, dependency in pairs(new_dependencies) do
+                dependencies[dependency] = dependency
+                installed[dependency] = dependency
+            end
+        end
+
+        return dependencies
+    end
+
+    -- Try to resolve dependencies as is
+    local dependencies, err = resolve_dependencies(package_names, installed)
+    if not dependencies then
+        return nil, err, 2
+    end
+
+    -- Fetch the packages from repository and store them to dest_dir
+    local download_dirs, err = downloader.fetch_pkgs(dependencies, dest_dir, manifest.repo_path, true)
+    if not download_dirs then
+        return nil, "Error downloading packages: " .. err, 3
+    end
+
+    -- Save rockspecs of modules for preparing some essential data
+    local rockspecs = {}
+    for pkg, dir in pairs(download_dirs) do
+        local rockspec_file = pl.path.join(dir, pkg.name .. "-" .. tostring(pkg.version) .. ".rockspec")
+        local rockspec, err = mf.load_rockspec(rockspec_file)
+        if not rockspec then
+            return nil, "Cound not load rockspec for package '" .. pkg .. "' from '" .. rockspec_file .. "': " .. err, 4
+        end
+        rockspecs[pkg] = rockspec
+
+        -- Create CMakeList.txt file for module with buildin type of build
+        --rockspec.build.type = 'none'
+        if rockspec.build.type ~= 'cmake' then
+            local cmake, err = r2cmake.process_rockspec(rockspec, dir, true)
+
+            if not cmake then
+                return nil, "Fatal error, cmake not generated: " .. err, 5
+            else
+                log:info("Successfully generated CMakeList.txt file for '%s'...", tostring(pkg))
+            end
+        else
+            log:info("'%s' uses own CMakeLists.txt file...", tostring(pkg))
+        end
+    end
+
+    -- Create main CMakeList.txt in dest_dir with modules and dependencies in right order
+    local cmake_commands = utils.generate_cmakelist(dependencies) 
+    local cmake_output_file = io.open(pl.path.join(dest_dir, "CMakeLists.txt"), "w")
+    if not cmake_output_file then
+        return nil, "Error creating CMakeLists.txt file in '" .. dest_dir .. "'", 6
+    end
+    cmake_output_file:write(cmake_commands)
+    cmake_output_file:close()
+
+    -- Create modules.c.in file in dest_dir
+    local config_file = utils.generate_config()
+    local config_output_file = io.open(pl.path.join(dest_dir, "modules.c.in"), "w")
+    if not config_output_file then
+        return nil, "Error creating modules.c.in file in '" .. dest_dir .. "'", 7
+    end
+    config_output_file:write(config_file)
+    config_output_file:close()
+
+    log:info("Successfully created file's for staic build ...\n")
+    
+    return true
+end
+
+-- Public wrapper for 'static' functionality, ensures correct setting of 'dest_dir'
+-- and performs argument checks
+function dist.static(package_names, dest_dir, variables)
+    if not package_names then return true end
+    if type(package_names) == "string" then package_names = {package_names} end
+
+    assert(type(package_names) == "table", "dist.install: Argument 'package_names' is not a table or string.")
+
+    if deploy_dir then cfg.update_root_dir(dest_dir) end
+    local result, err, status = _static(package_names, dest_dir, variables)
+    if deploy_dir then cfg.revert_root_dir() end
+    
     return result, err, status
 end
 
@@ -561,3 +687,4 @@ function dist.get_rockspec(download_dir, package_names)
 end
 
 return dist
+

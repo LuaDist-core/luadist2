@@ -19,7 +19,7 @@ function downloader.fetch_pkgs(packages, download_dir, repo_paths, not_versions)
     for _, pkg in pairs(packages) do
         assert(getmetatable(pkg) == Package, "downloader.fetch_pkgs: Argument 'packages' does not contain Package instances.")
 
-        local clone_dir = ""
+        local clone_dir = pl.path.join(download_dir, tostring(pkg))
         if not_versions == true then
             clone_dir = pl.path.join(download_dir, tostring(pkg.name))
         else

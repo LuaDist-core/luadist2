@@ -496,6 +496,7 @@ Usage: luadist DEPLOYMENT_DIRECTORY static MODULES... [-VARIABLES...]
         instructions = [[
 ---------------------------------------------------------------
 To complete static build do next steps:
+    $ cd dest_dir
     $ mkdir _build && cd _build
     $ cmake ..
     $ make

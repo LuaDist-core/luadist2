@@ -8,6 +8,7 @@ local utils = require "dist.utils"
 local mgr = require "dist.manager"
 local downloader = require "dist.downloader"
 local ordered = require "dist.ordered"
+local ReportBuilder = require "dist.ReportBuilder"
 local pl = require "pl.import_into"()
 local rocksolver = {}
 rocksolver.DependencySolver = require "rocksolver.DependencySolver"
@@ -18,6 +19,14 @@ local r2cmake = require 'rockspec2cmake'
 
 local dist = {}
 
+local function reports_broadcast(reports, package_names, func)
+    if cfg.report then
+        for _, package_name in pairs(package_names) do
+            func(reports[package_name])
+        end
+    end
+end
+
 -- Installs 'package_names' using optional CMake 'variables',
 -- returns true on success and nil, error_message, error_code on error
 -- Error codes:
@@ -26,14 +35,29 @@ local dist = {}
 -- 3 - package download failed
 -- 4 - installation of requested package failed
 -- 5 - installation of dependency failed
-local function _install(package_names, variables)
+local function _install(package_names, variables, reports)
     -- Get installed packages
     local installed = mgr.get_installed()
+
+    reports_broadcast(reports, package_names, function(r)
+        r:begin_stage("Manifest retrieval")
+    end)
 
     -- Get manifest
     local manifest, err = mf.get_manifest()
     if not manifest then
+        reports_broadcast(reports, package_names, function(r)
+            r:add_error(err, "Check if the URLs are right in the config.")
+        end)
+
         return nil, err, 1
+    end
+
+    if cfg.report then
+        reports_broadcast(reports, package_names, function(r)
+            r:add_step("OK")
+            r:begin_stage("Dependency resolving")
+        end)
     end
 
     local solver = rocksolver.DependencySolver(manifest, cfg.platform)
@@ -52,12 +76,18 @@ local function _install(package_names, variables)
             local new_dependencies, err = solver:resolve_dependencies(package_name, installed)
 
             if err then
+                if cfg.report then
+                    reports[package_name]:add_error(err)
+                end
                 return nil, err
             end
 
             -- Update dependencies to install with currently found ones and update installed packages
             -- for next dependency resolving as if previously found dependencies were already installed
             for _, dependency in pairs(new_dependencies) do
+                if cfg.report then
+                    reports[package_name]:add_dependency(dependency)
+                end
                 dependencies[dependency] = dependency
                 installed[dependency] = dependency
             end
@@ -154,9 +184,33 @@ function dist.install(package_names, deploy_dir, variables)
     assert(type(package_names) == "table", "dist.install: Argument 'package_names' is not a table or string.")
     assert(deploy_dir and type(deploy_dir) == "string", "dist.install: Argument 'deploy_dir' is not a string.")
 
+    local reports = {}
+    if cfg.report then
+        for _, package_name in pairs(package_names) do
+            reports[package_name] = ReportBuilder.new(package_name)
+        end
+    end
+
     if deploy_dir then cfg.update_root_dir(deploy_dir) end
-    local result, err, status = _install(package_names, variables)
+    local result, err, status = _install(package_names, variables, reports)
     if deploy_dir then cfg.revert_root_dir() end
+
+    if cfg.report then
+        for _, package_name in pairs(package_names) do
+            local report_content = reports[package_name]:generate()
+            print(report_content)
+            print()
+
+            local report_path = pl.path.join(deploy_dir, package_name .. ".md")
+            print("Creating report file '" .. report_path .. "'")
+            local report_file = io.open(report_path, "w")
+            if not report_file then
+                print("Error creating report file for package '" .. package_name .. "'.")
+            end
+            report_file:write(report_content)
+            report_file:close()
+        end
+    end
 
     return result, err, status
 end

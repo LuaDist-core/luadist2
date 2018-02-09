@@ -15,6 +15,13 @@ local tmpl = {
 
 ]],
 
+    manifest_urls = [[
+    - Trying to get manifest from the following URLs:
+@ for _, url in pairs(urls) do
+        - $(url)
+@ end
+]],
+
     stage_begin = [[
 
 ## $(i). $(name)
@@ -63,6 +70,13 @@ function ReportBuilder:add_step(description)
     })
 end
 
+function ReportBuilder:add_manifest_urls(urls)
+    table.insert(self.sections, {
+        type = "manifest_urls",
+        data = urls
+    })
+end
+
 function ReportBuilder:add_error(err, possible_fix)
     table.insert(self.sections, {
         type = "error",
@@ -104,6 +118,12 @@ function ReportBuilder:generate()
                 name = section.data
             })
             current_stage = current_stage + 1
+        elseif section.type == "manifest_urls" then
+            res = res .. pl.template.substitute(tmpl.manifest_urls, {
+                _escape = '@',
+                pairs = pairs,
+                urls = section.data
+            })
         elseif section.type == "step" then
             res = res .. pl.template.substitute(tmpl.step, {
                 _escape = '@',

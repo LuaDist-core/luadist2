@@ -41,13 +41,16 @@ local function _install(package_names, variables, reports)
 
     reports_broadcast(reports, package_names, function(r)
         r:begin_stage("Manifest retrieval")
+        -- TODO: should probably move this into the manifest module, as
+        -- what's here may get out of sync with the actual implementation
+        r:add_manifest_urls(cfg.manifest_repos)
     end)
 
     -- Get manifest
     local manifest, err = mf.get_manifest()
     if not manifest then
         reports_broadcast(reports, package_names, function(r)
-            r:add_error(err, "Check if the URLs are right in the config.")
+            r:add_error(err, "Check if the manifest URLs are right in the config.")
         end)
 
         return nil, err, 1
@@ -198,8 +201,8 @@ function dist.install(package_names, deploy_dir, variables)
     if cfg.report then
         for _, package_name in pairs(package_names) do
             local report_content = reports[package_name]:generate()
-            print(report_content)
-            print()
+            --print(report_content)
+            --print()
 
             local report_path = pl.path.join(deploy_dir, package_name .. ".md")
             print("Creating report file '" .. report_path .. "'")
@@ -350,7 +353,6 @@ end
 -- 5 - installation of dependency failed
 -- 6 - no package to make found
 local function _make (deploy_dir,variables, current_dir)
-
     -- Get installed packages
     local installed = mgr.get_installed()
 

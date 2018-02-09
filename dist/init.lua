@@ -27,6 +27,37 @@ local function reports_broadcast(reports, package_names, func)
     end
 end
 
+
+
+local function resolve_dependencies(solver, package_names, _installed, preinstall_lua)
+    local dependencies = ordered.Ordered()
+    local installed = rocksolver.utils.deepcopy(_installed)
+
+    if preinstall_lua then
+        table.insert(installed, preinstall_lua)
+    end
+
+    for _, package_name in pairs(package_names) do
+        -- Resolve dependencies
+        local new_dependencies, err = solver:resolve_dependencies(package_name, installed)
+
+        if err then
+            return nil, err
+        end
+
+        -- Update dependencies to install with currently found ones and update installed packages
+        -- for next dependency resolving as if previously found dependencies were already installed
+        for _, dependency in pairs(new_dependencies) do
+            dependencies[dependency] = dependency
+            installed[dependency] = dependency
+        end
+    end
+
+    return dependencies
+end
+
+
+
 -- Installs 'package_names' using optional CMake 'variables',
 -- returns true on success and nil, error_message, error_code on error
 -- Error codes:
@@ -35,72 +66,21 @@ end
 -- 3 - package download failed
 -- 4 - installation of requested package failed
 -- 5 - installation of dependency failed
-local function _install(package_names, variables, reports)
+-- TODO: add reports argument
+local function _install(package_names, variables)
     -- Get installed packages
     local installed = mgr.get_installed()
-
-    reports_broadcast(reports, package_names, function(r)
-        r:begin_stage("Manifest retrieval")
-        -- TODO: should probably move this into the manifest module, as
-        -- what's here may get out of sync with the actual implementation
-        r:add_manifest_urls(cfg.manifest_repos)
-    end)
 
     -- Get manifest
     local manifest, err = mf.get_manifest()
     if not manifest then
-        reports_broadcast(reports, package_names, function(r)
-            r:add_error(err, "Check if the manifest URLs are right in the config.")
-        end)
-
         return nil, err, 1
-    end
-
-    if cfg.report then
-        reports_broadcast(reports, package_names, function(r)
-            r:add_step("OK")
-            r:begin_stage("Dependency resolving")
-        end)
     end
 
     local solver = rocksolver.DependencySolver(manifest, cfg.platform)
 
-
-    local function resolve_dependencies(package_names, _installed, preinstall_lua)
-        local dependencies = ordered.Ordered()
-        local installed = rocksolver.utils.deepcopy(_installed)
-
-        if preinstall_lua then
-            table.insert(installed, preinstall_lua)
-        end
-
-        for _, package_name in pairs(package_names) do
-            -- Resolve dependencies
-            local new_dependencies, err = solver:resolve_dependencies(package_name, installed)
-
-            if err then
-                if cfg.report then
-                    reports[package_name]:add_error(err)
-                end
-                return nil, err
-            end
-
-            -- Update dependencies to install with currently found ones and update installed packages
-            -- for next dependency resolving as if previously found dependencies were already installed
-            for _, dependency in pairs(new_dependencies) do
-                if cfg.report then
-                    reports[package_name]:add_dependency(dependency)
-                end
-                dependencies[dependency] = dependency
-                installed[dependency] = dependency
-            end
-        end
-
-        return dependencies
-    end
-
     -- Try to resolve dependencies as is
-    local dependencies, err = resolve_dependencies(package_names, installed)
+    local dependencies, err = resolve_dependencies(solver, package_names, installed)
 
     -- If we failed, it is most likely because wrong version of lua package was selected,
     -- try to cycle through all of them, we may eventually succeed
@@ -115,7 +95,7 @@ local function _install(package_names, variables, reports)
             log:info("Trying to force usage of 'lua %s' to solve dependency resolving issues", version)
 
             -- Here we do not care about returned error message, we will use the original one if all fails
-            local new_dependencies = resolve_dependencies(package_names, installed, rocksolver.Package("lua", version, info, true))
+            local new_dependencies = resolve_dependencies(solver, package_names, installed, rocksolver.Package("lua", version, info, true))
 
             if new_dependencies then
                 dependencies = ordered.Ordered()
@@ -229,7 +209,6 @@ end
 -- 6 - main CMakeList.txt file creation failed
 -- 7 - creation of modules.c.in file failed
 local function _static(package_names, dest_dir, variables)
-
     -- Nothing is instaled for static build
     local installed = {} 
 
@@ -241,35 +220,8 @@ local function _static(package_names, dest_dir, variables)
 
     local solver = rocksolver.DependencySolver(manifest, cfg.platform)
 
-    local function resolve_dependencies(package_names, _installed, preinstall_lua)
-        local dependencies = ordered.Ordered()
-        local installed = rocksolver.utils.deepcopy(_installed)
-
-        if preinstall_lua then
-            table.insert(installed, preinstall_lua)
-        end
-
-        for _, package_name in pairs(package_names) do
-            -- Resolve dependencies
-            local new_dependencies, err = solver:resolve_dependencies(package_name, installed)
-
-            if err then
-                return nil, err
-            end
-
-            -- Update dependencies to install with currently found ones and update installed packages
-            -- for next dependency resolving as if previously found dependencies were already installed
-            for _, dependency in pairs(new_dependencies) do
-                dependencies[dependency] = dependency
-                installed[dependency] = dependency
-            end
-        end
-
-        return dependencies
-    end
-
     -- Try to resolve dependencies as is
-    local dependencies, err = resolve_dependencies(package_names, installed)
+    local dependencies, err = resolve_dependencies(solver, package_names, installed)
     if not dependencies then
         return nil, err, 2
     end
@@ -352,7 +304,7 @@ end
 -- 4 - installation of requested package failed
 -- 5 - installation of dependency failed
 -- 6 - no package to make found
-local function _make (deploy_dir,variables, current_dir)
+local function _make(deploy_dir, variables, current_dir)
     -- Get installed packages
     local installed = mgr.get_installed()
 
@@ -377,39 +329,12 @@ local function _make (deploy_dir,variables, current_dir)
         log:info("File ".. pl.path.basename(rockspec_files[1]) .. " will be used.")
     end
 
-    local maked_pkg_rockspec =mf.load_rockspec(rockspec_files[1])
+    local maked_pkg_rockspec = mf.load_rockspec(rockspec_files[1])
     local maked_pkg = maked_pkg_rockspec.package .. " " .. maked_pkg_rockspec.version
     package_names = {maked_pkg}
 
-    local function resolve_dependencies(package_names, _installed, preinstall_lua)
-        local dependencies = ordered.Ordered()
-        local installed = rocksolver.utils.deepcopy(_installed)
-
-        if preinstall_lua then
-            table.insert(installed, preinstall_lua)
-        end
-
-        for _, package_name in pairs(package_names) do
-            -- Resolve dependencies
-            local new_dependencies, err = solver:resolve_dependencies(package_name, installed)
-
-            if err then
-                return nil, err
-            end
-
-            -- Update dependencies to install with currently found ones and update installed packages
-            -- for next dependency resolving as if previously found dependencies were already installed
-            for _, dependency in pairs(new_dependencies) do
-                dependencies[dependency] = dependency
-                installed[dependency] = dependency
-            end
-        end
-
-        return dependencies
-    end
-
     -- Try to resolve dependencies as is
-    local dependencies, err = resolve_dependencies(package_names, installed)
+    local dependencies, err = resolve_dependencies(solver, package_names, installed)
 
     -- If we failed, it is most likely because wrong version of lua package was selected,
     -- try to cycle through all of them, we may eventually succeed
@@ -424,7 +349,7 @@ local function _make (deploy_dir,variables, current_dir)
             log:info("Trying to force usage of 'lua %s' to solve dependency resolving issues", version)
 
             -- Here we do not care about returned error message, we will use the original one if all fails
-            local new_dependencies = resolve_dependencies(package_names, installed, rocksolver.Package("lua", version, info, true))
+            local new_dependencies = resolve_dependencies(solver, package_names, installed, rocksolver.Package("lua", version, info, true))
 
             if new_dependencies then
                 dependencies = ordered.Ordered()

@@ -56,6 +56,45 @@ local function resolve_dependencies(solver, package_names, _installed, preinstal
     return dependencies
 end
 
+local function final_resolve_dependencies(manifest, solver, package_names, installed)
+    -- Try to resolve dependencies as is
+    local dependencies, err = resolve_dependencies(solver, package_names, installed)
+    if dependencies then
+        return dependencies, nil
+    end
+
+    -- If we failed, it is most likely because wrong version of lua package was selected,
+    -- try to cycle through all of them, we may eventually succeed
+
+    -- If lua is already installed, we can do nothing about it, user will have to upgrade / downgrade it manually
+    if installed.lua then
+        return nil, err
+    end
+
+    -- Try all versions of lua, newer first
+    for version, info in rocksolver.utils.sort(manifest.packages.lua or {}, rocksolver.const.compareVersions) do
+        log:info("Trying to force usage of 'lua %s' to solve dependency resolving issues", version)
+
+        -- Here we do not care about returned error message, we will use the original one if all fails
+        local new_dependencies = resolve_dependencies(solver, package_names, installed, rocksolver.Package("lua", version, info, true))
+
+        if new_dependencies then
+            dependencies = ordered.Ordered()
+            dependencies[rocksolver.Package("lua", version, info, false)] = rocksolver.Package("lua", version, info, false)
+            for _, dep in pairs(new_dependencies) do
+                dependencies[dep] = dep
+            end
+            break
+        end
+    end
+
+    if not dependencies then
+        return nil, err
+    end
+
+    return dependencies, nil
+end
+
 
 
 -- Installs 'package_names' using optional CMake 'variables',
@@ -79,37 +118,9 @@ local function _install(package_names, variables)
 
     local solver = rocksolver.DependencySolver(manifest, cfg.platform)
 
-    -- Try to resolve dependencies as is
-    local dependencies, err = resolve_dependencies(solver, package_names, installed)
-
-    -- If we failed, it is most likely because wrong version of lua package was selected,
-    -- try to cycle through all of them, we may eventually succeed
+    local dependencies, err = final_resolve_dependencies(manifest, solver, package_names, installed)
     if not dependencies then
-        -- If lua is already installed, we can do nothing about it, user will have to upgrade / downgrade it manually
-        if installed.lua then
-            return nil, err, 2
-        end
-
-        -- Try all versions of lua, newer first
-        for version, info in rocksolver.utils.sort(manifest.packages.lua or {}, rocksolver.const.compareVersions) do
-            log:info("Trying to force usage of 'lua %s' to solve dependency resolving issues", version)
-
-            -- Here we do not care about returned error message, we will use the original one if all fails
-            local new_dependencies = resolve_dependencies(solver, package_names, installed, rocksolver.Package("lua", version, info, true))
-
-            if new_dependencies then
-                dependencies = ordered.Ordered()
-                dependencies[rocksolver.Package("lua", version, info, false)] = rocksolver.Package("lua", version, info, false)
-                for _, dep in pairs(new_dependencies) do
-                    dependencies[dep] = dep
-                end
-                break
-            end
-        end
-
-        if not dependencies then
-            return nil, err, 2
-        end
+        return nil, err, 2
     end
 
     -- Table contains pairs <package, package directory>
@@ -210,7 +221,7 @@ end
 -- 7 - creation of modules.c.in file failed
 local function _static(package_names, dest_dir, variables)
     -- Nothing is instaled for static build
-    local installed = {} 
+    local installed = {}
 
     -- Get manifest
     local manifest, err = mf.get_manifest()
@@ -258,7 +269,7 @@ local function _static(package_names, dest_dir, variables)
     end
 
     -- Create main CMakeList.txt in dest_dir with modules and dependencies in right order
-    local cmake_commands = utils.generate_cmakelist(dependencies) 
+    local cmake_commands = utils.generate_cmakelist(dependencies)
     local cmake_output_file = io.open(pl.path.join(dest_dir, "CMakeLists.txt"), "w")
     if not cmake_output_file then
         return nil, "Error creating CMakeLists.txt file in '" .. dest_dir .. "'", 6
@@ -276,7 +287,7 @@ local function _static(package_names, dest_dir, variables)
     config_output_file:close()
 
     log:info("Successfully created file's for staic build ...\n")
-    
+
     return true
 end
 
@@ -291,7 +302,7 @@ function dist.static(package_names, dest_dir, variables)
     if deploy_dir then cfg.update_root_dir(dest_dir) end
     local result, err, status = _static(package_names, dest_dir, variables)
     if deploy_dir then cfg.revert_root_dir() end
-    
+
     return result, err, status
 end
 
@@ -333,39 +344,10 @@ local function _make(deploy_dir, variables, current_dir)
     local maked_pkg = maked_pkg_rockspec.package .. " " .. maked_pkg_rockspec.version
     package_names = {maked_pkg}
 
-    -- Try to resolve dependencies as is
-    local dependencies, err = resolve_dependencies(solver, package_names, installed)
-
-    -- If we failed, it is most likely because wrong version of lua package was selected,
-    -- try to cycle through all of them, we may eventually succeed
+    local dependencies, err = final_resolve_dependencies(manifest, solver, package_names, installed)
     if not dependencies then
-        -- If lua is already installed, we can do nothing about it, user will have to upgrade / downgrade it manually
-        if installed.lua then
-            return nil, err, 2
-        end
-
-        -- Try all versions of lua, newer first
-        for version, info in rocksolver.utils.sort(manifest.packages.lua or {}, rocksolver.const.compareVersions) do
-            log:info("Trying to force usage of 'lua %s' to solve dependency resolving issues", version)
-
-            -- Here we do not care about returned error message, we will use the original one if all fails
-            local new_dependencies = resolve_dependencies(solver, package_names, installed, rocksolver.Package("lua", version, info, true))
-
-            if new_dependencies then
-                dependencies = ordered.Ordered()
-                dependencies[rocksolver.Package("lua", version, info, false)] = rocksolver.Package("lua", version, info, false)
-                for _, dep in pairs(new_dependencies) do
-                    dependencies[dep] = dep
-                end
-                break
-            end
-        end
-
-        if not dependencies then
-            return nil, err, 2
-        end
+        return nil, err, 2
     end
-
 
     -- Table contains pairs <package, package directory>
     local package_directories = ordered.Ordered()

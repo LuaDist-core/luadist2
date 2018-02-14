@@ -1,2 +1,4 @@
 /dist/config.lua
+_testdir/
+luadist2/
 

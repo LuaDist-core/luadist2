@@ -19,6 +19,17 @@ local r2cmake = require 'rockspec2cmake'
 
 local dist = {}
 
+local function write_report(report, deploy_dir, command)
+    local report_path = pl.path.join(deploy_dir, command:gsub(" ", "_") .. ".md")
+    print("Creating report file '" .. report_path .. "'")
+    local report_file = io.open(report_path, "w")
+    if not report_file then
+        print("Error creating report file for command '" .. command .. "'.")
+    end
+    report_file:write(report:generate())
+    report_file:close()
+end
+
 local function resolve_dependencies(report, solver, package_names, _installed, preinstall_lua)
     local dependencies = ordered.Ordered()
     local installed = rocksolver.utils.deepcopy(_installed)
@@ -124,6 +135,7 @@ local function _install(package_names, variables, report)
 
     if cfg.report then
         report:begin_stage("Manifest retrieval")
+        report:add_step()
     end
 
     -- Get manifest
@@ -181,26 +193,38 @@ local function _install(package_names, variables, report)
         end
     end
 
-    -- TODO: report
+    if cfg.report then
+        report:begin_stage("Installing packages")
+    end
 
     -- Install packages
     for pkg, dir in pairs(package_directories) do
-        ok, err = mgr.install_pkg(pkg, dir, variables)
+        if cfg.report then
+            report:add_header(pkg)
+        end
+
+        ok, err = mgr.install_pkg(report, pkg, dir, variables)
         if not ok then
-            return nil, "Error installing: " ..err, (utils.name_matches(tostring(pkg), package_names, true) and 4) or 5
+            return nil, "Error installing: " .. err, (utils.name_matches(tostring(pkg), package_names, true) and 4) or 5
         end
 
         -- If installation was successful, update local manifest
         table.insert(installed, pkg)
         mgr.save_installed(installed)
+
+        if cfg.report then
+            report:add_step("Updating local manifest at '" .. cfg.local_manifest_file_abs .. "'")
+        end
     end
+
+    -- TODO: report
 
     -- Mark binary dependencies of current package present in the time of installation
     for pkg, dir in pairs(package_directories) do
         local bin_deps, err = rocksolver.utils.generate_bin_dependencies(pkg:dependencies(cfg.platform), installed)
-            -- save bin dependencies of package
-            pkg.bin_dependencies = bin_deps
-            mgr.save_installed(installed)
+        -- save bin dependencies of package
+        pkg.bin_dependencies = bin_deps
+        mgr.save_installed(installed)
     end
 
     return true
@@ -227,14 +251,7 @@ function dist.install(package_names, deploy_dir, variables)
     if deploy_dir then cfg.revert_root_dir() end
 
     if cfg.report then
-        local report_path = pl.path.join(deploy_dir, command:gsub(" ", "_") .. ".md")
-        print("Creating report file '" .. report_path .. "'")
-        local report_file = io.open(report_path, "w")
-        if not report_file then
-            print("Error creating report file for command '" .. command .. "'.")
-        end
-        report_file:write(report:generate())
-        report_file:close()
+        write_report(report, deploy_dir, command)
     end
 
     return result, err, status
@@ -349,28 +366,32 @@ end
 -- 4 - installation of requested package failed
 -- 5 - installation of dependency failed
 -- 6 - no package to make found
-local function _make(deploy_dir, variables, current_dir)
-    -- Get installed packages
-    local installed = mgr.get_installed()
-
-    -- Get manifest including the local repos
-    local manifest, err = mf.get_manifest()
-    if not manifest then
-        return nil, err, 1
-    end
-
-    local solver = rocksolver.DependencySolver(manifest, cfg.platform)
-
+local function _make(deploy_dir, variables, current_dir, report)
     -- Collect all rockspec files in the current_directory and sort them alphabetically.
     local rockspec_files =  pl.dir.getfiles(current_dir, "*.rockspec")
     table.sort(rockspec_files)
 
+    if cfg.report then
+        report:begin_stage("Searching for Rockspec files")
+    end
+
     -- Package specified in first rockspec will be installed, others will be ignored.
     if #rockspec_files == 0 then
-        return nil, "Directory " .. current_dir .. " doesn't contain any .rockspec files.", 6
+        local text = "Directory " .. current_dir .. " doesn't contain any .rockspec files."
+        if cfg.report then
+            report:add_error(text)
+        end
+        return nil, text, 6
     elseif #rockspec_files > 1 then
+        if cfg.report then
+            report:add_rockspec_files(rockspec_files)
+            report:add_step("File '" .. rockspec_files[1] .. "' will be used.")
+        end
         log:info("Multiple rockspec files found, file ".. pl.path.basename(rockspec_files[1]) .. "will be used.")
     else
+        if cfg.report then
+            report:add_step("File '" .. rockspec_files[1] .. "' will be used.")
+        end
         log:info("File ".. pl.path.basename(rockspec_files[1]) .. " will be used.")
     end
 
@@ -378,12 +399,37 @@ local function _make(deploy_dir, variables, current_dir)
     local maked_pkg = maked_pkg_rockspec.package .. " " .. maked_pkg_rockspec.version
     package_names = {maked_pkg}
 
-    -- TODO: move to dist.make and make it work
-    local report = ReportBuilder.new("make")
+    -- Get installed packages
+    local installed = mgr.get_installed()
+
+    if cfg.report then
+        report:begin_stage("Manifest retrieval")
+        report:add_step()
+    end
+
+    -- Get manifest including the local repos
+    local manifest, err = mf.get_manifest()
+    if not manifest then
+        if cfg.report then
+            report:add_error(err)
+        end
+        return nil, err, 1
+    end
+
+    if cfg.report then
+        report:add_step("Success")
+        report:begin_stage("Dependency solving")
+    end
+
+    local solver = rocksolver.DependencySolver(manifest, cfg.platform)
 
     local dependencies, err = final_resolve_dependencies(report, manifest, solver, package_names, installed)
     if not dependencies then
         return nil, err, 2
+    end
+
+    if cfg.report then
+        report:begin_stage("Fetching packages")
     end
 
     -- Table contains pairs <package, package directory>
@@ -399,35 +445,52 @@ local function _make(deploy_dir, variables, current_dir)
 
         -- Maked package
         if tostring(pkg) == maked_pkg then
+            if cfg.report then
+                report:add_package(pkg, nil, current_dir)
+            end
             package_directories[pkg] = current_dir
 
         -- Package with local url
         elseif local_url then
             log:info("Package ".. pkg .. " will be installed from local url " .. local_url)
+            if cfg.report then
+                report:add_package(pkg, nil, local_url)
+            end
             package_directories[pkg] = local_url
 
         --  Package fetched from remote repo
         else
-            local dirs, err = downloader.fetch_pkgs({pkg}, cfg.temp_dir_abs, manifest.repo_path)
+            local dirs, err, urls = downloader.fetch_pkgs({pkg}, cfg.temp_dir_abs, manifest.repo_path)
+            -- TODO: handle errors
+            if cfg.report then
+                report:add_package(pkg, urls[pkg].remote_url, urls[pkg].local_url)
+            end
             package_directories[pkg] = dirs[pkg]
         end
     end
 
+    if cfg.report then
+        report:begin_stage("Installing packages")
+    end
 
     -- Install packages. Installs every package 'pkg' from its package directory 'dir'
     for pkg, dir in pairs(package_directories) do
+        if cfg.report then
+            report:add_header(pkg)
+        end
+
         -- Prevent cleaning our current direcory when making of package was not successful
         if dir == current_dir then
             store_debug = cfg.debug
             cfg.debug = true
-            ok, err = mgr.install_pkg(pkg, dir, variables)
+            ok, err = mgr.install_pkg(report, pkg, dir, variables)
             if ok and store_debug == false then
                 pl.dir.rmtree(current_dir)
                 pl.dir.rmtree(pl.path.join(deploy_dir,"tmp",pkg.."-build"))
             end
             cfg.debug = store_debug
         else
-            ok, err = mgr.install_pkg(pkg, dir, variables)
+            ok, err = mgr.install_pkg(report, pkg, dir, variables)
         end
         if not ok then
             return nil, "Error installing: " ..err, (utils.name_matches(tostring(pkg), package_names, true) and 4) or 5
@@ -436,7 +499,13 @@ local function _make(deploy_dir, variables, current_dir)
         -- If installation was successful, update local manifest
         table.insert(installed, pkg)
         mgr.save_installed(installed)
+
+        if cfg.report then
+            report:add_step("Updating local manifest at '" .. cfg.local_manifest_file_abs .. "'")
+        end
     end
+
+    -- TODO: report
 
 
     -- Mark binary dependencies of current package present in the time of installation
@@ -457,9 +526,16 @@ function dist.make(deploy_dir, variables, current_dir)
     assert(deploy_dir and type(deploy_dir) == "string", "dist.make: Argument 'deploy_dir' is not a string.")
     assert(current_dir and type(current_dir) == "string", "dist.make: Argument 'current_dir' is not a string.")
 
+    local command = "make"
+    local report = ReportBuilder.new(command)
+
     if deploy_dir then cfg.update_root_dir(deploy_dir) end
-    local result, err, status = _make(deploy_dir, variables, current_dir)
+    local result, err, status = _make(deploy_dir, variables, current_dir, report)
     if deploy_dir then cfg.revert_root_dir() end
+
+    if cfg.report then
+        write_report(report, deploy_dir, command)
+    end
 
     return result, err, status
 end

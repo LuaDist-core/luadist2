@@ -14,6 +14,7 @@ local tmpl = {
 ]],
 
     header = [[
+
 ### $(header)
 ]],
 
@@ -43,6 +44,20 @@ local tmpl = {
 
     err = [[
 - **Error:** $(err)
+]],
+
+    cmake_variables = [[
+- **CMake Variables:**
+@ for k, v in pairs(variables) do
+    - `$(k)` = $(v)
+@ end
+]],
+
+    rockspec_files = [[
+- **Rockspec files found:**
+@ for _, v in ipairs(files) do
+    - $(v)
+@ end
 ]]
 }
 
@@ -100,9 +115,24 @@ end
 function ReportBuilder:add_error(err)
     table.insert(self.sections, {
         type = "error",
-        data = err,
+        data = err
     })
 end
+
+function ReportBuilder:add_cmake_variables(variables)
+    table.insert(self.sections, {
+        type = "cmake_variables",
+        data = variables
+    })
+end
+
+function ReportBuilder:add_rockspec_files(files)
+    table.insert(self.sections, {
+        type = "rockspec_files",
+        data = files
+    })
+end
+
 
 function ReportBuilder:generate()
     local res = pl.template.substitute(tmpl.intro, {
@@ -145,6 +175,18 @@ function ReportBuilder:generate()
             res = res .. pl.template.substitute(tmpl.err, {
                 _escape = '@',
                 err = section.data
+            })
+        elseif section.type == "cmake_variables" then
+            res = res .. pl.template.substitute(tmpl.cmake_variables, {
+                _escape = '@',
+                pairs = pairs,
+                variables = section.data
+            })
+        elseif section.type == "rockspec_files" then
+            res = res .. pl.template.substitute(tmpl.rockspec_files, {
+                _escape = '@',
+                ipairs = ipairs,
+                files = section.data
             })
         end
     end

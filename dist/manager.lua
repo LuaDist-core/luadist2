@@ -64,7 +64,7 @@ function manager.build_pkg(src_dir, build_dir, variables)
 end
 
 -- Installs package 'pkg' from 'pkg_dir' using optional CMake 'variables'.
-function manager.install_pkg(pkg, pkg_dir, variables)
+function manager.install_pkg(report, pkg, pkg_dir, variables)
     variables = variables or {}
 
     assert(getmetatable(pkg) == rocksolver.Package, "manager.install_pkg: Argument 'pkg' is not a Package instance.")
@@ -99,18 +99,31 @@ function manager.install_pkg(pkg, pkg_dir, variables)
 
     -- Load rockspec file
     if not pl.path.exists(rockspec_file) then
-        return nil, "Could not find rockspec for package '" .. pkg .. "', expected location: '" .. rockspec_file .. "'"
+        local text = "Could not find rockspec for package '" .. pkg .. "', expected location: '" .. rockspec_file .. "'"
+        if cfg.report then
+            report:add_error(text)
+        end
+        return nil, text
     end
 
     local rockspec, err = mf.load_rockspec(rockspec_file)
     if not rockspec then
-        return nil, "Cound not load rockspec for package '" .. pkg .. "' from '" .. rockspec_file .. "': " .. err
+        local text = "Cound not load rockspec for package '" .. pkg .. "' from '" .. rockspec_file .. "': " .. err
+        if cfg.report then
+            report:add_error(text)
+        end
+        return nil, text
+    end
+
+    if cfg.report then
+        report:add_step("Loaded rockspec from '" .. rockspec_file .. "'")
     end
 
     pkg.spec = rockspec
 
     -- Binary package
     if pkg.spec.files then
+        -- TODO: report
         pkg.files = rocksolver.utils.deepcopy(pkg.spec.files)
         pkg.spec.files = nil
         pkg.spec.version = rocksolver.const.splitVersionAndHash(pkg.version.string)
@@ -142,24 +155,55 @@ function manager.install_pkg(pkg, pkg_dir, variables)
     if not cmake_commands then
         -- Could not generate cmake commands, but there can be cmake attached
         if not rockspec.build or rockspec.build.type ~= "cmake" or not pl.path.exists(pl.path.join(pkg_dir, "CMakeLists.txt")) then
-            return nil, "Cound not generate cmake commands for package '" .. pkg .. "': " .. err
+            local text = "Cound not generate cmake commands for package '" .. pkg .. "': " .. err
+            if cfg.report then
+                report:add_error(text)
+            end
+            return nil, text
         else
-            log:info("Package '%s': using CMakeLists.txt provided by package itself", tostring(pkg))
+            local text = ("Package '%s': using CMakeLists.txt provided by package itself"):format(tostring(pkg))
+            if cfg.report then
+                report:add_step(text)
+            end
+            log:info(text)
+        end
+    else
+        if cfg.report then
+            report:add_step("Generated CMake file in '" .. pkg_dir .. "'")
         end
     end
 
     -- Build the package
     local build_dir = pl.path.join(cfg.temp_dir_abs, pkg .. "-build")
     pl.dir.makepath(build_dir)
-    local ok, err = manager.build_pkg(pkg_dir, build_dir, cmake_variables)
-    if not ok then
-        return nil, "Error building package '" .. pkg .. "': " .. err
+
+    if cfg.report then
+        report:add_step("Building into '" .. build_dir .. "'")
+        report:add_cmake_variables(cmake_variables)
     end
 
-    local ok, status, stdout, stderr = pl.utils.executeex("cd " .. utils.quote(build_dir) .. " && " .. cfg.cmake .. " -P cmake_install.cmake")
-
+    local ok, err = manager.build_pkg(pkg_dir, build_dir, cmake_variables)
     if not ok then
-        return nil, "Cound not install package '" .. pkg .. "' from directory '" .. build_dir .. "'\nstdout:\n" .. stdout .. "\nstderr:\n" .. stderr
+        local text = "Error building package '" .. pkg .. "': " .. err
+        if cfg.report then
+            report:add_error(text)
+        end
+        return nil, text
+    end
+
+    local command = "cd " .. utils.quote(build_dir) .. " && " .. cfg.cmake .. " -P cmake_install.cmake"
+    if cfg.report then
+        report:add_step("Executing '" .. command .. "'")
+    end
+
+    local ok, status, stdout, stderr = pl.utils.executeex(command)
+    if not ok then
+        local text = "Cound not install package '" .. pkg .. "' from directory '" .. build_dir .. "'\nstdout:\n" .. stdout .. "\nstderr:\n" .. stderr
+        if cfg.report then
+            report:add_error(text)
+        end
+
+        return nil, text
     end
 
     -- Table to collect installed files
@@ -169,7 +213,11 @@ function manager.install_pkg(pkg, pkg_dir, variables)
     -- Collect installed files
     local mf, err = io.open(install_mf, "r")
     if not mf then
-        return nil, "Could not open CMake installation manifest '" .. install_mf .. "': " .. err
+        local text = "Could not open CMake installation manifest '" .. install_mf .. "': " .. err
+        if cfg.report then
+            report:add_error(text)
+        end
+        return nil, text
     end
 
     for line in mf:lines() do
@@ -181,9 +229,13 @@ function manager.install_pkg(pkg, pkg_dir, variables)
     pkg.built_on_platform = cfg.platform[1]
 
 
-
     -- Cleanup
     if not cfg.debug then
+        if cfg.report then
+            report:add_step("Removing '" .. pkg_dir .. "'")
+            report:add_step("Removing '" .. build_dir .. "'")
+            report:add_hint("If you wish to keep these directories, set the debug flag")
+        end
         pl.dir.rmtree(pkg_dir)
         pl.dir.rmtree(build_dir)
     end
@@ -274,8 +326,8 @@ function manager.copy_pkg(pkg, source_dir, destination_dir)
     local pkg_files = pkg.files
 
     if #pkg_files == 0 then
-      err = "Package has no files to be exported (probably incorrect rockspec or record in manifest)."
-      return nil, err
+        err = "Package has no files to be exported (probably incorrect rockspec or record in manifest)."
+        return nil, err
     end
 
     log:info("Copying package " .. pkg.name .. " " .. pkg.spec.version)

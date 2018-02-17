@@ -8,13 +8,16 @@ local Package = require "rocksolver.Package"
 local downloader = {}
 
 -- Fetches packages (table 'packages') to 'download_dir' from 'repo_paths'
--- Returns table of <Package, path to download directory> or nil and an error message on error
+-- Returns:
+--     - table of <Package, path to download directory>, nil, table of <Package, { local_url, remote_url }> on success
+--     - nil and an error message on error
 function downloader.fetch_pkgs(packages, download_dir, repo_paths, not_versions)
     assert(type(packages) == "table", "downloader.fetch_pkgs: Argument 'packages' is not a table.")
     assert(type(download_dir) == "string" and pl.path.isabs(download_dir), "downloader.fetch_pkgs: Argument 'download_dir' is not an absolute path.")
     assert(type(repo_paths) == "table", "downloader.fetch_pkgs: Argument 'repo_paths' is not a table.")
 
     local fetched_dirs = ordered.Ordered()
+    local urls = {}
 
     for _, pkg in pairs(packages) do
         assert(getmetatable(pkg) == Package, "downloader.fetch_pkgs: Argument 'packages' does not contain Package instances.")
@@ -53,6 +56,10 @@ function downloader.fetch_pkgs(packages, download_dir, repo_paths, not_versions)
                 ok, err = git.checkout_sha(sha, clone_dir)
 
                 if ok then
+                    urls[pkg] = {
+                        local_url = clone_dir,
+                        remote_url = repo_url
+                    }
                     break
                 else
                     return nil, "Could not fetch package '" .. pkg .. "' from repository '" .. repo_url .. "' to '" .. clone_dir .. "': " .. err
@@ -72,7 +79,7 @@ function downloader.fetch_pkgs(packages, download_dir, repo_paths, not_versions)
         fetched_dirs[pkg] = clone_dir
     end
 
-    return fetched_dirs
+    return fetched_dirs, nil, urls
 end
 
 return downloader

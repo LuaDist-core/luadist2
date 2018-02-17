@@ -19,17 +19,7 @@ local r2cmake = require 'rockspec2cmake'
 
 local dist = {}
 
-local function reports_broadcast(reports, package_names, func)
-    if cfg.report then
-        for _, package_name in pairs(package_names) do
-            func(reports[package_name])
-        end
-    end
-end
-
-
-
-local function resolve_dependencies(solver, package_names, _installed, preinstall_lua)
+local function resolve_dependencies(report, solver, package_names, _installed, preinstall_lua)
     local dependencies = ordered.Ordered()
     local installed = rocksolver.utils.deepcopy(_installed)
 
@@ -42,6 +32,9 @@ local function resolve_dependencies(solver, package_names, _installed, preinstal
         local new_dependencies, err = solver:resolve_dependencies(package_name, installed)
 
         if err then
+            if cfg.report then
+                report:add_error(err)
+            end
             return nil, err
         end
 
@@ -53,30 +46,50 @@ local function resolve_dependencies(solver, package_names, _installed, preinstal
         end
     end
 
+    if cfg.report then
+        report:add_header("Resolved dependencies:")
+        for k in pairs(dependencies) do
+            report:add_step(k)
+        end
+    end
     return dependencies
 end
 
-local function final_resolve_dependencies(manifest, solver, package_names, installed)
+-- Final logic for resolving dependencies, includes trying out different versions of Lua if an error
+-- occured.
+local function final_resolve_dependencies(report, manifest, solver, package_names, installed)
     -- Try to resolve dependencies as is
-    local dependencies, err = resolve_dependencies(solver, package_names, installed)
+    local dependencies, err = resolve_dependencies(report, solver, package_names, installed)
     if dependencies then
-        return dependencies, nil
+        return dependencies
     end
 
     -- If we failed, it is most likely because wrong version of lua package was selected,
     -- try to cycle through all of them, we may eventually succeed
 
-    -- If lua is already installed, we can do nothing about it, user will have to upgrade / downgrade it manually
-    if installed.lua then
-        return nil, err
+    for _, v in pairs(installed) do
+        -- If lua is already installed, we can do nothing about it, user will have to upgrade / downgrade it manually
+        if v.name == "lua" then
+            if cfg.report then
+                report:add_hint({
+                    "The error may be caused by your version of Lua not being compatible with all the dependencies.",
+                    "Maybe consider upgrading / downgrading your Lua version."
+                })
+            end
+            return nil, err
+        end
     end
 
     -- Try all versions of lua, newer first
     for version, info in rocksolver.utils.sort(manifest.packages.lua or {}, rocksolver.const.compareVersions) do
-        log:info("Trying to force usage of 'lua %s' to solve dependency resolving issues", version)
+        local text = ("Trying to force usage of 'lua %s' to solve dependency resolving issues"):format(version)
+        log:info(text)
+        if cfg.report then
+            report:add_step(text)
+        end
 
         -- Here we do not care about returned error message, we will use the original one if all fails
-        local new_dependencies = resolve_dependencies(solver, package_names, installed, rocksolver.Package("lua", version, info, true))
+        local new_dependencies = resolve_dependencies(report, solver, package_names, installed, rocksolver.Package("lua", version, info, true))
 
         if new_dependencies then
             dependencies = ordered.Ordered()
@@ -92,7 +105,7 @@ local function final_resolve_dependencies(manifest, solver, package_names, insta
         return nil, err
     end
 
-    return dependencies, nil
+    return dependencies
 end
 
 
@@ -105,22 +118,37 @@ end
 -- 3 - package download failed
 -- 4 - installation of requested package failed
 -- 5 - installation of dependency failed
--- TODO: add reports argument
-local function _install(package_names, variables)
+local function _install(package_names, variables, report)
     -- Get installed packages
     local installed = mgr.get_installed()
+
+    if cfg.report then
+        report:begin_stage("Manifest retrieval")
+    end
 
     -- Get manifest
     local manifest, err = mf.get_manifest()
     if not manifest then
+        if cfg.report then
+            report:add_error(err)
+        end
         return nil, err, 1
+    end
+
+    if cfg.report then
+        report:add_step("Success")
+        report:begin_stage("Dependency solving")
     end
 
     local solver = rocksolver.DependencySolver(manifest, cfg.platform)
 
-    local dependencies, err = final_resolve_dependencies(manifest, solver, package_names, installed)
+    local dependencies, err = final_resolve_dependencies(report, manifest, solver, package_names, installed)
     if not dependencies then
         return nil, err, 2
+    end
+
+    if cfg.report then
+        report:begin_stage("Fetching packages")
     end
 
     -- Table contains pairs <package, package directory>
@@ -137,14 +165,23 @@ local function _install(package_names, variables)
         -- Package with local url
         if local_url then
             log:info("Package ".. pkg .. " will be installed from local url " .. local_url)
+            if cfg.report then
+                report:add_package(pkg, nil, local_url)
+            end
             package_directories[pkg] = local_url
 
         --  Package fetched from remote repo
         else
-            local dirs, err = downloader.fetch_pkgs({pkg}, cfg.temp_dir_abs, manifest.repo_path)
+            local dirs, err, urls = downloader.fetch_pkgs({pkg}, cfg.temp_dir_abs, manifest.repo_path)
+            -- TODO: handle errors
+            if cfg.report then
+                report:add_package(pkg, urls[pkg].remote_url, urls[pkg].local_url)
+            end
             package_directories[pkg] = dirs[pkg]
         end
     end
+
+    -- TODO: report
 
     -- Install packages
     for pkg, dir in pairs(package_directories) do
@@ -178,32 +215,26 @@ function dist.install(package_names, deploy_dir, variables)
     assert(type(package_names) == "table", "dist.install: Argument 'package_names' is not a table or string.")
     assert(deploy_dir and type(deploy_dir) == "string", "dist.install: Argument 'deploy_dir' is not a string.")
 
-    local reports = {}
-    if cfg.report then
-        for _, package_name in pairs(package_names) do
-            reports[package_name] = ReportBuilder.new(package_name)
-        end
+    local command = "install"
+    for _, v in ipairs(package_names) do
+        command = command .. " " .. v
     end
 
+    local report = ReportBuilder.new(command)
+
     if deploy_dir then cfg.update_root_dir(deploy_dir) end
-    local result, err, status = _install(package_names, variables, reports)
+    local result, err, status = _install(package_names, variables, report)
     if deploy_dir then cfg.revert_root_dir() end
 
     if cfg.report then
-        for _, package_name in pairs(package_names) do
-            local report_content = reports[package_name]:generate()
-            --print(report_content)
-            --print()
-
-            local report_path = pl.path.join(deploy_dir, package_name .. ".md")
-            print("Creating report file '" .. report_path .. "'")
-            local report_file = io.open(report_path, "w")
-            if not report_file then
-                print("Error creating report file for package '" .. package_name .. "'.")
-            end
-            report_file:write(report_content)
-            report_file:close()
+        local report_path = pl.path.join(deploy_dir, command:gsub(" ", "_") .. ".md")
+        print("Creating report file '" .. report_path .. "'")
+        local report_file = io.open(report_path, "w")
+        if not report_file then
+            print("Error creating report file for command '" .. command .. "'.")
         end
+        report_file:write(report:generate())
+        report_file:close()
     end
 
     return result, err, status
@@ -231,8 +262,11 @@ local function _static(package_names, dest_dir, variables)
 
     local solver = rocksolver.DependencySolver(manifest, cfg.platform)
 
+    -- TODO: move to dist.static and make it work
+    local report = ReportBuilder.new("static")
+
     -- Try to resolve dependencies as is
-    local dependencies, err = resolve_dependencies(solver, package_names, installed)
+    local dependencies, err = resolve_dependencies(report, solver, package_names, installed)
     if not dependencies then
         return nil, err, 2
     end
@@ -344,7 +378,10 @@ local function _make(deploy_dir, variables, current_dir)
     local maked_pkg = maked_pkg_rockspec.package .. " " .. maked_pkg_rockspec.version
     package_names = {maked_pkg}
 
-    local dependencies, err = final_resolve_dependencies(manifest, solver, package_names, installed)
+    -- TODO: move to dist.make and make it work
+    local report = ReportBuilder.new("make")
+
+    local dependencies, err = final_resolve_dependencies(report, manifest, solver, package_names, installed)
     if not dependencies then
         return nil, err, 2
     end

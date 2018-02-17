@@ -97,34 +97,38 @@ function run_clean()
 end
 
 function run_install()
-    local package = "xml"
-    local to_remove = package .. " lub luafilesystem"
+    local packages = "xml luacheck"
+    local to_remove = packages .. " lub luafilesystem"
 
     if pl.path.exists(target_directory) then
         print("== Cleaning up, removing packages " .. to_remove)
         pl.utils.execute(luadist_command .. " remove " .. to_remove)
 
-        print("== Trying to require 'xml', this attempt should fail...")
-        local ok, code = pl.utils.execute(target_lua_command .. " -e 'require \"xml\"'")
-        if ok then
-            print("== Error: Require 'xml' was successful even if it shouldn't be there.")
-            return 1
+        for pkg in packages:gmatch("%S+") do
+            print("== Trying to require '" .. pkg .. "', this attempt should fail...")
+            local ok, code = pl.utils.execute(target_lua_command .. " -e 'require \"" .. pkg .. "\"'")
+            if ok then
+                print("== Error: Require '" .. pkg .. "' was successful even if it shouldn't be there.")
+                return 1
+            end
         end
         print("== Success!")
     end
 
-    print("== Installing package '" .. package .. "'")
-    local ok, code = pl.utils.execute(luadist_command .. " install " .. package)
+    print("== Installing '" .. packages .. "'")
+    local ok, code = pl.utils.execute(luadist_command .. " install " .. packages)
     if not ok then
         return code
     end
 
     pl.path.chdir(target_directory)
 
-    print("== Trying to require 'xml'...")
-    local ok, code = pl.utils.execute(target_lua_command .. " -e 'require \"xml\"'")
-    if not ok then
-        return code
+    for pkg in packages:gmatch("%S+") do
+        print("== Trying to require '" .. pkg .. "'...")
+        local ok, code = pl.utils.execute(target_lua_command .. " -e 'require \"" .. pkg .. "\"'")
+        if not ok then
+            return code
+        end
     end
 
     print("== Success!")

@@ -3,23 +3,8 @@ pl.template = require "pl.template"
 
 local tmpl = {
     intro = [[
-# Report for package $(package_name)
+# Report for '$(command)'
 
-]],
-
-    dependencies = [[
-## Dependencies
-@ for _, dep in pairs(dependencies) do
-    - $(dep)
-@ end
-
-]],
-
-    manifest_urls = [[
-    - Trying to get manifest from the following URLs:
-@ for _, url in pairs(urls) do
-        - $(url)
-@ end
 ]],
 
     stage_begin = [[
@@ -28,29 +13,46 @@ local tmpl = {
 
 ]],
 
+    header = [[
+### $(header)
+]],
+
     step = [[
-    - $(step)
+- $(step)
+]],
+
+    hint = [[
+
+@ if type(hint) == "string" then
+- *hint:* $(hint)
+@ elseif type(hint) == "table" then
+- *hint*:
+@   for _, v in ipairs(hint) do
+    - $(v)
+@   end
+@ end
+]],
+
+    package = [[
+- **$(pkg.name)**
+@ if pkg.url then
+    - **remote:** $(pkg.url)
+@ end
+    - **local:** $(pkg.local_path)
 ]],
 
     err = [[
-
-### Error:
-    - $(err)
-@ if possible_fix ~= nil then
-    - $(possible_fix)
-@ end
-
+- **Error:** $(err)
 ]]
 }
 
 local ReportBuilder = {}
 ReportBuilder.__index = ReportBuilder
 
-function ReportBuilder.new(package_name)
+function ReportBuilder.new(command)
     local self = setmetatable({}, ReportBuilder)
 
-    self.package_name = package_name
-    self.dependencies = {}
+    self.command = command
     self.sections = {}
 
     return self
@@ -63,6 +65,13 @@ function ReportBuilder:begin_stage(description)
     })
 end
 
+function ReportBuilder:add_header(header)
+    table.insert(self.sections, {
+        type = "header",
+        data = header
+    })
+end
+
 function ReportBuilder:add_step(description)
     table.insert(self.sections, {
         type = "step",
@@ -70,44 +79,36 @@ function ReportBuilder:add_step(description)
     })
 end
 
-function ReportBuilder:add_manifest_urls(urls)
+function ReportBuilder:add_package(pkg, url, local_path)
     table.insert(self.sections, {
-        type = "manifest_urls",
-        data = urls
+        type = "package",
+        data = {
+            name = pkg,
+            url = url,
+            local_path = local_path
+        }
     })
 end
 
-function ReportBuilder:add_error(err, possible_fix)
+function ReportBuilder:add_hint(hint)
+    table.insert(self.sections, {
+        type = "hint",
+        data = hint
+    })
+end
+
+function ReportBuilder:add_error(err)
     table.insert(self.sections, {
         type = "error",
         data = err,
-        possible_fix = possible_fix
     })
-end
-
-function ReportBuilder:clear_dependencies()
-    for k in pairs(self.dependencies) do
-        self.dependencies[k] = nil
-    end
-end
-
-function ReportBuilder:add_dependency(dependency)
-    table.insert(self.dependencies, dependency)
 end
 
 function ReportBuilder:generate()
     local res = pl.template.substitute(tmpl.intro, {
         _escape = '@',
-        package_name = self.package_name
+        command = self.command
     })
-
-    if #self.dependencies > 0 then
-        res = res .. pl.template.substitute(tmpl.dependencies, {
-            _escape = '@',
-            pairs = pairs,
-            dependencies = self.dependencies
-        })
-    end
 
     local current_stage = 1
     for _, section in pairs(self.sections) do
@@ -118,22 +119,32 @@ function ReportBuilder:generate()
                 name = section.data
             })
             current_stage = current_stage + 1
-        elseif section.type == "manifest_urls" then
-            res = res .. pl.template.substitute(tmpl.manifest_urls, {
+        elseif section.type == "header" then
+            res = res .. pl.template.substitute(tmpl.header, {
                 _escape = '@',
-                pairs = pairs,
-                urls = section.data
+                header = section.data
             })
         elseif section.type == "step" then
             res = res .. pl.template.substitute(tmpl.step, {
                 _escape = '@',
                 step = section.data
             })
+        elseif section.type == "package" then
+            res = res .. pl.template.substitute(tmpl.package, {
+                _escape = '@',
+                pkg = section.data
+            })
+        elseif section.type == "hint" then
+            res = res .. pl.template.substitute(tmpl.hint, {
+                _escape = '@',
+                ipairs = ipairs,
+                type = type,
+                hint = section.data
+            })
         elseif section.type == "error" then
             res = res .. pl.template.substitute(tmpl.err, {
                 _escape = '@',
-                err = section.data,
-                possible_fix = section.possible_fix
+                err = section.data
             })
         end
     end

@@ -289,7 +289,7 @@ local function _static(package_names, dest_dir, variables)
     end
 
     -- Fetch the packages from repository and store them to dest_dir
-    local download_dirs, err = downloader.fetch_pkgs(dependencies, dest_dir, manifest.repo_path, true)
+    local download_dirs, err = downloader.fetch_pkgs(dependencies, pl.path.abspath(dest_dir), manifest.repo_path, true)
     if not download_dirs then
         return nil, "Error downloading packages: " .. err, 3
     end

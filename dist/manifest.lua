@@ -12,14 +12,21 @@ local manifest = nil
 function manifest_module.get_manifest()
     -- Download manifest if this is first time we are requesting it in this run,
     -- otherwise it is cached in memory until luadist is terminated
+    local used_repos = cfg.manifest_repos
+
+    local more_info = {
+        downloading = manifest == nil,
+        used_repos = used_repos
+    }
+
     if manifest == nil then
-        manifest, err = manifest_module.download_manifest(cfg.manifest_repos)
+        manifest, err = manifest_module.download_manifest(used_repos)
         if not manifest then
-            return nil, "Error downloading manifest: " .. err
+            return nil, "Error downloading manifest: " .. err, more_info
         end
     end
 
-    return manifest
+    return manifest, nil, more_info
 end
 
 -- Download manifest from the table of git 'manifest_urls' and return manifest

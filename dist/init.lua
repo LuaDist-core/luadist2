@@ -43,9 +43,7 @@ local function resolve_dependencies(report, solver, package_names, _installed, p
         local new_dependencies, err = solver:resolve_dependencies(package_name, installed)
 
         if err then
-            if cfg.report then
-                report:add_error(err)
-            end
+            report:add_error(err)
             return nil, err
         end
 
@@ -57,11 +55,9 @@ local function resolve_dependencies(report, solver, package_names, _installed, p
         end
     end
 
-    if cfg.report then
-        report:add_header("Resolved dependencies:")
-        for k in pairs(dependencies) do
-            report:add_step(k)
-        end
+    report:add_header("Resolved dependencies:")
+    for k in pairs(dependencies) do
+        report:add_step(k)
     end
     return dependencies
 end
@@ -81,12 +77,10 @@ local function final_resolve_dependencies(report, manifest, solver, package_name
     for _, v in pairs(installed) do
         -- If lua is already installed, we can do nothing about it, user will have to upgrade / downgrade it manually
         if v.name == "lua" then
-            if cfg.report then
-                report:add_hint({
-                    "The error may be caused by your version of Lua not being compatible with all the dependencies.",
-                    "Maybe consider upgrading / downgrading your Lua version."
-                })
-            end
+            report:add_hint({
+                "The error may be caused by your version of Lua not being compatible with all the dependencies.",
+                "Maybe consider upgrading / downgrading your Lua version."
+            })
             return nil, err
         end
     end
@@ -95,9 +89,7 @@ local function final_resolve_dependencies(report, manifest, solver, package_name
     for version, info in rocksolver.utils.sort(manifest.packages.lua or {}, rocksolver.const.compareVersions) do
         local text = ("Trying to force usage of 'lua %s' to solve dependency resolving issues"):format(version)
         log:info(text)
-        if cfg.report then
-            report:add_step(text)
-        end
+        report:add_step(text)
 
         -- Here we do not care about returned error message, we will use the original one if all fails
         local new_dependencies = resolve_dependencies(report, solver, package_names, installed, rocksolver.Package("lua", version, info, true))
@@ -133,24 +125,25 @@ local function _install(package_names, variables, report)
     -- Get installed packages
     local installed = mgr.get_installed()
 
-    if cfg.report then
-        report:begin_stage("Manifest retrieval")
-        report:add_step()
-    end
+    report:begin_stage("Manifest retrieval")
 
     -- Get manifest
-    local manifest, err = mf.get_manifest()
+    local manifest, err, more_info = mf.get_manifest()
+
+    if more_info.downloading then
+        report:add_step("Downloading manifest...")
+        report:add_manifest_urls(more_info.used_repos)
+    else
+        report:add_step("Manifest already present, probably from previous download step.")
+    end
+
     if not manifest then
-        if cfg.report then
-            report:add_error(err)
-        end
+        report:add_error(err)
         return nil, err, 1
     end
 
-    if cfg.report then
-        report:add_step("Success")
-        report:begin_stage("Dependency solving")
-    end
+    report:add_step("Success")
+    report:begin_stage("Dependency solving")
 
     local solver = rocksolver.DependencySolver(manifest, cfg.platform)
 
@@ -159,9 +152,7 @@ local function _install(package_names, variables, report)
         return nil, err, 2
     end
 
-    if cfg.report then
-        report:begin_stage("Fetching packages")
-    end
+    report:begin_stage("Fetching packages")
 
     -- Table contains pairs <package, package directory>
     local package_directories = ordered.Ordered()
@@ -177,31 +168,23 @@ local function _install(package_names, variables, report)
         -- Package with local url
         if local_url then
             log:info("Package ".. pkg .. " will be installed from local url " .. local_url)
-            if cfg.report then
-                report:add_package(pkg, nil, local_url)
-            end
+            report:add_package(pkg, nil, local_url)
             package_directories[pkg] = local_url
 
         --  Package fetched from remote repo
         else
             local dirs, err, urls = downloader.fetch_pkgs({pkg}, cfg.temp_dir_abs, manifest.repo_path)
             -- TODO: handle errors
-            if cfg.report then
-                report:add_package(pkg, urls[pkg].remote_url, urls[pkg].local_url)
-            end
+            report:add_package(pkg, urls[pkg].remote_url, urls[pkg].local_url)
             package_directories[pkg] = dirs[pkg]
         end
     end
 
-    if cfg.report then
-        report:begin_stage("Installing packages")
-    end
+    report:begin_stage("Installing packages")
 
     -- Install packages
     for pkg, dir in pairs(package_directories) do
-        if cfg.report then
-            report:add_header(pkg)
-        end
+        report:add_header(pkg)
 
         ok, err = mgr.install_pkg(report, pkg, dir, variables)
         if not ok then
@@ -212,9 +195,7 @@ local function _install(package_names, variables, report)
         table.insert(installed, pkg)
         mgr.save_installed(installed)
 
-        if cfg.report then
-            report:add_step("Updating local manifest at '" .. cfg.local_manifest_file_abs .. "'")
-        end
+        report:add_step("Updating local manifest at '" .. cfg.local_manifest_file_abs .. "'")
     end
 
     -- TODO: report
@@ -371,27 +352,19 @@ local function _make(deploy_dir, variables, current_dir, report)
     local rockspec_files =  pl.dir.getfiles(current_dir, "*.rockspec")
     table.sort(rockspec_files)
 
-    if cfg.report then
-        report:begin_stage("Searching for Rockspec files")
-    end
+    report:begin_stage("Searching for Rockspec files")
 
     -- Package specified in first rockspec will be installed, others will be ignored.
     if #rockspec_files == 0 then
         local text = "Directory " .. current_dir .. " doesn't contain any .rockspec files."
-        if cfg.report then
-            report:add_error(text)
-        end
+        report:add_error(text)
         return nil, text, 6
     elseif #rockspec_files > 1 then
-        if cfg.report then
-            report:add_rockspec_files(rockspec_files)
-            report:add_step("File '" .. rockspec_files[1] .. "' will be used.")
-        end
+        report:add_rockspec_files(rockspec_files)
+        report:add_step("File '" .. rockspec_files[1] .. "' will be used.")
         log:info("Multiple rockspec files found, file ".. pl.path.basename(rockspec_files[1]) .. "will be used.")
     else
-        if cfg.report then
-            report:add_step("File '" .. rockspec_files[1] .. "' will be used.")
-        end
+        report:add_step("File '" .. rockspec_files[1] .. "' will be used.")
         log:info("File ".. pl.path.basename(rockspec_files[1]) .. " will be used.")
     end
 
@@ -402,24 +375,18 @@ local function _make(deploy_dir, variables, current_dir, report)
     -- Get installed packages
     local installed = mgr.get_installed()
 
-    if cfg.report then
-        report:begin_stage("Manifest retrieval")
-        report:add_step()
-    end
+    report:begin_stage("Manifest retrieval")
+    report:add_step()
 
     -- Get manifest including the local repos
     local manifest, err = mf.get_manifest()
     if not manifest then
-        if cfg.report then
-            report:add_error(err)
-        end
+        report:add_error(err)
         return nil, err, 1
     end
 
-    if cfg.report then
-        report:add_step("Success")
-        report:begin_stage("Dependency solving")
-    end
+    report:add_step("Success")
+    report:begin_stage("Dependency solving")
 
     local solver = rocksolver.DependencySolver(manifest, cfg.platform)
 
@@ -428,9 +395,7 @@ local function _make(deploy_dir, variables, current_dir, report)
         return nil, err, 2
     end
 
-    if cfg.report then
-        report:begin_stage("Fetching packages")
-    end
+    report:begin_stage("Fetching packages")
 
     -- Table contains pairs <package, package directory>
     local package_directories = ordered.Ordered()
@@ -445,39 +410,29 @@ local function _make(deploy_dir, variables, current_dir, report)
 
         -- Maked package
         if tostring(pkg) == maked_pkg then
-            if cfg.report then
-                report:add_package(pkg, nil, current_dir)
-            end
+            report:add_package(pkg, nil, current_dir)
             package_directories[pkg] = current_dir
 
         -- Package with local url
         elseif local_url then
             log:info("Package ".. pkg .. " will be installed from local url " .. local_url)
-            if cfg.report then
-                report:add_package(pkg, nil, local_url)
-            end
+            report:add_package(pkg, nil, local_url)
             package_directories[pkg] = local_url
 
         --  Package fetched from remote repo
         else
             local dirs, err, urls = downloader.fetch_pkgs({pkg}, cfg.temp_dir_abs, manifest.repo_path)
             -- TODO: handle errors
-            if cfg.report then
-                report:add_package(pkg, urls[pkg].remote_url, urls[pkg].local_url)
-            end
+            report:add_package(pkg, urls[pkg].remote_url, urls[pkg].local_url)
             package_directories[pkg] = dirs[pkg]
         end
     end
 
-    if cfg.report then
-        report:begin_stage("Installing packages")
-    end
+    report:begin_stage("Installing packages")
 
     -- Install packages. Installs every package 'pkg' from its package directory 'dir'
     for pkg, dir in pairs(package_directories) do
-        if cfg.report then
-            report:add_header(pkg)
-        end
+        report:add_header(pkg)
 
         -- Prevent cleaning our current direcory when making of package was not successful
         if dir == current_dir then
@@ -500,9 +455,7 @@ local function _make(deploy_dir, variables, current_dir, report)
         table.insert(installed, pkg)
         mgr.save_installed(installed)
 
-        if cfg.report then
-            report:add_step("Updating local manifest at '" .. cfg.local_manifest_file_abs .. "'")
-        end
+        report:add_step("Updating local manifest at '" .. cfg.local_manifest_file_abs .. "'")
     end
 
     -- TODO: report

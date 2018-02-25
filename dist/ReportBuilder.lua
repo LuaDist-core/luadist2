@@ -18,6 +18,14 @@ local tmpl = {
 ### $(header)
 ]],
 
+    manifest_urls = [[
+
+- **Manifest URLs**:
+@ for _, v in ipairs(urls) do
+    - $(v)
+@ end
+]],
+
     step = [[
 - $(step)
 ]],
@@ -87,6 +95,13 @@ function ReportBuilder:add_header(header)
     })
 end
 
+function ReportBuilder:add_manifest_urls(urls)
+    table.insert(self.sections, {
+        type = "manifest_urls",
+        data = urls
+    })
+end
+
 function ReportBuilder:add_step(description)
     table.insert(self.sections, {
         type = "step",
@@ -153,6 +168,12 @@ function ReportBuilder:generate()
             res = res .. pl.template.substitute(tmpl.header, {
                 _escape = '@',
                 header = section.data
+            })
+        elseif section.type == "manifest_urls" then
+            res = res .. pl.template.substitute(tmpl.manifest_urls, {
+                _escape = '@',
+                ipairs = ipairs,
+                urls = section.data
             })
         elseif section.type == "step" then
             res = res .. pl.template.substitute(tmpl.step, {

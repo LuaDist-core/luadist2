@@ -1,0 +1,5 @@
+/dist/config.lua
+_testdir/
+luadist2/
+_make/
+

@@ -36,6 +36,7 @@ include_local_repos     = true         -- include local repositories.
 
 -- Settings ----------------------------------------------------------
 debug         = false         -- Use debug mode (mainly does not clean temp).
+report        = true          -- Generate a report from installing a package.
 
 -- Available log levels are: DEBUG, INFO, WARN, ERROR, FATAL
 -- Minimum level for log messages to be printed (nil to disable).

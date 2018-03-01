@@ -299,8 +299,14 @@ Usage: luadist [DEPLOYMENT_DIRECTORY] info [MODULES...] [-VARIABLES...]
 
             -- If no packages specified explicitly, show just list all packages from manifest
             if #modules == 0 then
-                for _, pkg in pairs(manifest.packages) do
-                    print("  " .. pkg.name)
+                local names = {}
+                for name in pairs(manifest.packages) do
+                    table.insert(names, name)
+                end
+                table.sort(names)
+
+                for _, name in ipairs(names) do
+                    print("  " .. name)
                 end
                 return 0
             -- If some packages explicitly specified, retrieve and show detailed info about them
@@ -503,8 +509,8 @@ To complete static build do next steps:
     $ ./slua]],
 
         run = function (dest_dir, modules, cmake_variables)
-            if dest_dir == nil then 
-                print(commands["static"].help) 
+            if dest_dir == nil then
+                print(commands["static"].help)
                 os.exit(1)
             end
             if type(modules) == "string" then modules = {modules} end
@@ -525,7 +531,7 @@ To complete static build do next steps:
                 os.exit(status)
             else
                 print("Static build successfully prepared.")
-                print(commands["static"].instructions) 
+                print(commands["static"].instructions)
                 return 0
             end
         end

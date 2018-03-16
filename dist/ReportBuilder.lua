@@ -56,8 +56,8 @@ local tmpl = {
 
     cmake_variables = [[
 - **CMake Variables:**
-@ for k, v in pairs(variables) do
-    - `$(k)` = $(v)
+@ for _, v in ipairs(variables) do
+    - `$(v.name)` = $(v.value)
 @ end
 ]],
 
@@ -135,9 +135,23 @@ function ReportBuilder:add_error(err)
 end
 
 function ReportBuilder:add_cmake_variables(variables)
+    local keys = {}
+    for k in pairs(variables) do
+        table.insert(keys, k)
+    end
+    table.sort(keys)
+
+    local data = {}
+    for _, k in ipairs(keys) do
+        table.insert(data, {
+            name = k,
+            value = variables[k]
+        })
+    end
+
     table.insert(self.sections, {
         type = "cmake_variables",
-        data = variables
+        data = data
     })
 end
 
@@ -200,7 +214,7 @@ function ReportBuilder:generate()
         elseif section.type == "cmake_variables" then
             res = res .. pl.template.substitute(tmpl.cmake_variables, {
                 _escape = '@',
-                pairs = pairs,
+                ipairs = ipairs,
                 variables = section.data
             })
         elseif section.type == "rockspec_files" then

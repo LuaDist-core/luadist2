@@ -281,7 +281,7 @@ local function _static(package_names, dest_dir, variables)
         local rockspec_file = pl.path.join(dir, pkg.name .. "-" .. tostring(pkg.version) .. ".rockspec")
         local rockspec, err = mf.load_rockspec(rockspec_file)
         if not rockspec then
-            return nil, "Cound not load rockspec for package '" .. pkg .. "' from '" .. rockspec_file .. "': " .. err, 4
+            return nil, "Could not load rockspec for package '" .. pkg .. "' from '" .. rockspec_file .. "': " .. err, 4
         end
         rockspecs[pkg] = rockspec
 

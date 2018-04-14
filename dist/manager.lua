@@ -108,7 +108,7 @@ function manager.install_pkg(report, pkg, pkg_dir, variables)
 
     local rockspec, err = mf.load_rockspec(rockspec_file)
     if not rockspec then
-        local text = "Cound not load rockspec for package '" .. pkg .. "' from '" .. rockspec_file .. "': " .. err
+        local text = "Could not load rockspec for package '" .. pkg .. "' from '" .. rockspec_file .. "': " .. err
         if cfg.report then
             report:add_error(text)
         end
@@ -155,7 +155,7 @@ function manager.install_pkg(report, pkg, pkg_dir, variables)
     if not cmake_commands then
         -- Could not generate cmake commands, but there can be cmake attached
         if not rockspec.build or rockspec.build.type ~= "cmake" or not pl.path.exists(pl.path.join(pkg_dir, "CMakeLists.txt")) then
-            local text = "Cound not generate cmake commands for package '" .. pkg .. "': " .. err
+            local text = "Could not generate cmake commands for package '" .. pkg .. "': " .. err
             if cfg.report then
                 report:add_error(text)
             end
@@ -198,7 +198,7 @@ function manager.install_pkg(report, pkg, pkg_dir, variables)
 
     local ok, status, stdout, stderr = pl.utils.executeex(command)
     if not ok then
-        local text = "Cound not install package '" .. pkg .. "' from directory '" .. build_dir .. "'\nstdout:\n" .. stdout .. "\nstderr:\n" .. stderr
+        local text = "Could not install package '" .. pkg .. "' from directory '" .. build_dir .. "'\nstdout:\n" .. stdout .. "\nstderr:\n" .. stderr
         if cfg.report then
             report:add_error(text)
         end

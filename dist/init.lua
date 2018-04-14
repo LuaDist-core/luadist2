@@ -706,7 +706,7 @@ function dist.get_rockspec(download_dir, package_names)
         local rockspec_file = pl.path.join(dir, pkg.name .. "-" .. tostring(pkg.version) .. ".rockspec")
         local rockspec, err = mf.load_rockspec(rockspec_file)
         if not rockspec then
-            return nil, "Cound not load rockspec for package '" .. pkg .. "' from '" .. rockspec_file .. "': " .. err
+            return nil, "Could not load rockspec for package '" .. pkg .. "' from '" .. rockspec_file .. "': " .. err
         end
 
         rockspecs[pkg] = rockspec

@@ -225,6 +225,9 @@ function manager.install_pkg(report, pkg, pkg_dir, variables)
     end
     mf:close()
 
+    if pkg.spec.description == nil then
+        pkg.spec.description = {}
+    end
     pkg.spec.description.built_on = os.date("%d. %m. %Y")
     pkg.built_on_platform = cfg.platform[1]
 

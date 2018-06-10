@@ -174,7 +174,11 @@ local function _install(package_names, variables, report)
         --  Package fetched from remote repo
         else
             local dirs, err, urls = downloader.fetch_pkgs({pkg}, cfg.temp_dir_abs, manifest.repo_path)
-            -- TODO: handle errors
+            if err then
+                report:add_error(err)
+                return nil, err, 3
+            end
+
             report:add_package(pkg, urls[pkg].remote_url, urls[pkg].local_url)
             package_directories[pkg] = dirs[pkg]
         end

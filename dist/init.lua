@@ -193,7 +193,7 @@ local function _install(package_names, variables, report)
 
         ok, err = mgr.install_pkg(report, pkg, dir, variables)
         if not ok then
-            report.add_error("Error installing: " .. err)
+            report:add_error("Error installing: " .. err)
             return nil, "Error installing: " .. err, (utils.name_matches(tostring(pkg), package_names, true) and 4) or 5
         end
 
